@@ -1,0 +1,5 @@
+POOL_PATH = 'data/pool.csv'
+INTERIM_PATH = 'data/interim'
+PRICE_PATH = 'data/Stock_price/full_history'
+START_DATE = '2018/01/01'
+END_DATE = '2023/01/01'
