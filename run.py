@@ -1,11 +1,10 @@
-import pickle
 import pandas as pd
 from pathlib import Path
 
 import config
 
-from strategy.buy_and_hold import BuyAndHoldStrategy
-from utils.plot import plot_performance
+from strategy.buy_and_hold import BuyAndHold
+from utils.plot import plot_values
 
 def main():
     cwd = Path.cwd()
@@ -18,14 +17,14 @@ def main():
     price_data = pd.read_csv(price_path)
 
     pool = pool['Stock_symbol'].tolist()
-    strategy = BuyAndHoldStrategy(
+    strategy = BuyAndHold(
         pool,
         price_data,
         start_date=config.START_DATE,
         end_date=config.END_DATE,
     )
 
-    performance = strategy.calculate_performance()
-    plot_performance(performance)
+    history = strategy.execute()
+    plot_values(history)
 if __name__ == '__main__':
     main()

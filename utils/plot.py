@@ -4,14 +4,15 @@ from typing import Dict
 import matplotlib.pyplot as plt
 from typing import Dict
 
-def plot_performance(performance: Dict):
+def plot_values(history: Dict):
     """Plot portfolio value"""
-    portfolio_values = performance['values']
+
+    dates = history.keys()
+    values = history.values()
 
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # Plot portfolio value
-    ax.plot(portfolio_values['date'], portfolio_values['portfolio_value'])
+    ax.plot(dates, values)
     ax.set_title('Portfolio Value Over Time')
     ax.set_ylabel('Value ($)')
     ax.grid(True)
