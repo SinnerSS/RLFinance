@@ -99,7 +99,6 @@ class BuyAndHoldStrategy:
             self.build_portfolio()
             
         portfolio_values = self._calculate_portfolio_value()
-        print(portfolio_values)
         
         return {
             'portfolio': self.portfolio,
