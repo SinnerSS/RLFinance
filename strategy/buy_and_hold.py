@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import List, Dict, Optional
 
+from utils.eval import evaluate_strategy
 from utils.performance import monitor_time
 
 class BuyAndHold:
@@ -39,7 +40,7 @@ class BuyAndHold:
         self.stock_data = self._prepare_stock_data(filtered_data)
         
         self.portfolio, self.plan = {}, {}
-        self.history = {}
+        self.history = pd.DataFrame({'date': [self.start_date - pd.Timedelta(days=1)], 'portfolio_value': [self.capital]})
 
     def _filter_date_range(self, data, start_date: pd.Timestamp,  end_date: pd.Timestamp) -> pd.DataFrame:
         """Filter dataframe by date range."""
@@ -72,7 +73,7 @@ class BuyAndHold:
         for date in dates: 
             self._update_portfolio(date)
             date_value = self._calculate_portfolio_value(date)
-            self.history[date] = date_value
+            self.history = pd.concat([self.history, pd.DataFrame({'date': [date], 'portfolio_value': [date_value]})], ignore_index=True)
 
         return self.history
     
@@ -134,3 +135,5 @@ class BuyAndHold:
 
         return price
 
+    def evaluate(self, against: pd.DataFrame):
+        evaluate_strategy(self.history, against)
