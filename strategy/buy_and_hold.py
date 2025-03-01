@@ -29,34 +29,37 @@ class BuyAndHold:
             equal_weight: If True, equal allocation; else, weighted by Count
         """
         self.pool = pool
-        self.data = data
         self.capital = initial_capital
         self.equal_weight = equal_weight
-        self.portfolio = {}
-        self.stock_data = {}
-        self.plan = {}
-        self.history = {}
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
         
-        self._filter_date_range(self.start_date, self.end_date)
+        filtered_data = self._filter_date_range(data, self.start_date, self.end_date)
         
-        self._prepare_stock_data()
+        self.stock_data = self._prepare_stock_data(filtered_data)
         
-    def _filter_date_range(self, start_date: pd.Timestamp,  end_date: pd.Timestamp) -> None:
+        self.portfolio, self.plan = {}, {}
+        self.history = {}
+
+    def _filter_date_range(self, data, start_date: pd.Timestamp,  end_date: pd.Timestamp) -> pd.DataFrame:
         """Filter dataframe by date range."""
-        self.data['date'] = pd.to_datetime(self.data['date'])
+        data['date'] = pd.to_datetime(data['date'])
         if start_date:
-            self.data = self.data.loc[self.data['date'] >= start_date]
+            data = data.loc[data['date'] >= start_date]
         if end_date:
-            self.data = self.data.loc[self.data['date'] <= end_date]
+            data = data.loc[data['date'] <= end_date]
+
+        return data
             
-    def _prepare_stock_data(self) -> None:
+    def _prepare_stock_data(self, data) -> Dict:
         """Prepare individual stock data dictionaries."""
+        stock_data = {}
         for symbol in self.pool:
-            stock_df = self.data[self.data['Stock_symbol'] == symbol]
+            stock_df = data[data['Stock_symbol'] == symbol]
             if not stock_df.empty:
-                self.stock_data[symbol] = stock_df
+                stock_data[symbol] = stock_df
+
+        return stock_data
 
     @monitor_time
     def execute(self):
@@ -99,43 +102,6 @@ class BuyAndHold:
                     }
                     self.capital -= allocated
                     del self.plan[symbol]
-
-    def build_portfolio(self) -> Dict:
-        """
-        Build the initial portfolio based on the strategy parameters.
-        Buys each stock at the earliest date when data is available.
-        
-        Returns:
-            Dict containing portfolio composition and leftover capital
-        """
-        weights = self._calculate_weights()
-        self.portfolio = {}
-        self.leftover_capital = self.capital
-        
-        for symbol, symbol_data in self.stock_data.items():
-            if not symbol_data.empty and symbol in weights:
-                first_date = symbol_data['date'].min()
-                first_row = symbol_data[symbol_data['date'] == first_date]
-                
-                if not first_row.empty:
-                    first_price = first_row['open'].iloc[0]
-                    capital_allocated = self.capital * weights[symbol]
-                    shares = capital_allocated / first_price
-                    
-                    self.portfolio[symbol] = {
-                        'shares': shares,
-                        'entry_price': first_price,
-                        'entry_date': first_date
-                    }
-                    self.leftover_capital -= capital_allocated
-        
-        if self.portfolio:
-            all_entry_dates = [details['entry_date'] for details in self.portfolio.values()]
-            self.all_capital_allocated_date = max(all_entry_dates)
-        else:
-            self.all_capital_allocated_date = None
-        
-        return self.portfolio
  
     def _calculate_portfolio_value(self, date: pd.Timestamp):
         """
@@ -167,3 +133,4 @@ class BuyAndHold:
         price = symbol_data.loc[symbol_data['date'] == last_available_date, 'adj close'].iloc[0]
 
         return price
+
