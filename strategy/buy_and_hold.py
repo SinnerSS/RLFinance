@@ -136,4 +136,4 @@ class BuyAndHold:
         return price
 
     def evaluate(self, against: pd.DataFrame):
-        evaluate_strategy(self.history, against)
+        return evaluate_strategy(self.history, against)
