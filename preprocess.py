@@ -3,7 +3,7 @@ from tqdm import tqdm
 from pathlib import Path
 from collections import Counter
 
-import config
+from config import Config
 
 def news_by_stock(news: pd.DataFrame) -> Counter:
 
@@ -87,13 +87,11 @@ def load_price_data(pool: pd.DataFrame, data_dir: Path):
     return price_data
 
 def main():
+    cf = Config()
 
-    post_path = Path.cwd() / config.DATA_PATH / 'post'
-    price_path = Path.cwd() / config.DATA_PATH / 'Stock_price/full_history'
-    if not post_path.is_dir():
-        post_path.mkdir()
-
-    news_path = Path.cwd() / config.DATA_PATH / 'Stock_news/nasdaq_exteral_data.csv'
+    post_path = cf.data_path / 'post'
+    price_path = cf.data_path / 'Stock_price/full_history'
+    news_path = cf.data_path / 'Stock_news/nasdaq_exteral_data.csv'
 
     all_counts = Counter()
     for chunk in tqdm(pd.read_csv(news_path, chunksize=10000), desc='Counting news by stock'):
