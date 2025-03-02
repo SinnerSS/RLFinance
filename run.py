@@ -18,17 +18,26 @@ def main():
     baseline = pd.read_csv(baseline_path)
 
     pool = pool['Stock_symbol'].tolist()
-    strategy = BuyAndHold(
+    bah_pool = BuyAndHold(
         pool,
         price_data,
         start_date=cf.start_date,
         end_date=cf.end_date,
     )
 
-    history = strategy.execute()
-    history.to_csv(cf.result_path / 'history.csv', index=False)
-    print(strategy.evaluate(against=baseline))
-    plot_values(history)
+    bah_snp = BuyAndHold(
+        ['SPY'],
+        price_data,
+        start_date=cf.start_date,
+        end_date=cf.end_date
+    )
+
+    history1 = bah_pool.execute()
+    history2 = bah_snp.execute()
+    print(bah_pool.evaluate(against=baseline))
+    print(bah_snp.evaluate(against=baseline))
+    plot_values(history1)
+    plot_values(history2)
 
 if __name__ == '__main__':
     main()
