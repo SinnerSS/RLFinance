@@ -31,7 +31,10 @@ def max_drawdown(returns: pd.DataFrame) -> Tuple[float, pd.Timestamp, pd.Timesta
     max_dd = drawdown.min()
     max_dd_idx = drawdown.idxmin()
     peak_idx = previous_peaks.iloc[:max_dd_idx].idxmax()
-    
+
+    assert isinstance(peak_idx, int)
+    assert isinstance(max_dd_idx, int)
+
     return max_dd, returns['date'].iloc[peak_idx], returns['date'].iloc[max_dd_idx]
 
 def evaluate_strategy(portfolio_values: pd.DataFrame, against: pd.DataFrame) -> Dict:
