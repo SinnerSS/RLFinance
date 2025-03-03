@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict, Union
 
 from .base_strategy import BaseStrategy
 
@@ -12,9 +12,9 @@ class BuyAndHold(BaseStrategy):
         self,
         pool: List[str],
         data: pd.DataFrame,
+        start_date: Union[str, pd.Timestamp],
+        end_date: Union[str, pd.Timestamp],
         initial_capital: float = 10000.0,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
         equal_weight: bool = True
     ):
         """
@@ -28,7 +28,7 @@ class BuyAndHold(BaseStrategy):
             end_date: Optional end date (YYYY-MM-DD)
             equal_weight: If True, equal allocation; else, weighted by Count
         """
-        super().__init__(pool, data, initial_capital, start_date, end_date)
+        super().__init__(pool, data, start_date, end_date, initial_capital)
         self.equal_weight = equal_weight
         
     def _update_strategy(self, date: pd.Timestamp):

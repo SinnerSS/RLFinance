@@ -11,12 +11,12 @@ def returns(portfolio_values: pd.DataFrame) -> pd.DataFrame:
 def cumulative_returns(portfolio_values: pd.DataFrame) -> pd.DataFrame:
     """Calculate cumulative returns from portfolio values"""
     df = returns(portfolio_values)
-    df['cumulative_return'] = (1 + df['return'].fillna(0)).cumprod() - 1
+    df['cumulative_return'] = (1 + df['return'].fillna(0, inplace=False)).cumprod() - 1
     return df
 
 def sharpe_ratio(returns: pd.DataFrame, risk_free_rates: pd.Series) -> float:
     """Calculate Sharpe ratio (annualized)"""
-    df = returns.dropna(subset=['return'])
+    df = returns.dropna(subset=['return'], inplace=False)
     
     daily_rf = (1 + risk_free_rates) ** (1/252) - 1
     excess_returns = df['return'] - daily_rf
@@ -24,7 +24,7 @@ def sharpe_ratio(returns: pd.DataFrame, risk_free_rates: pd.Series) -> float:
 
 def max_drawdown(returns: pd.DataFrame) -> Tuple[float, pd.Timestamp, pd.Timestamp]:
     """Calculate maximum drawdown and timeframe"""
-    wealth_index = (1 + returns['return'].fillna(0)).cumprod()
+    wealth_index = (1 + returns['return'].fillna(0, inplace=False)).cumprod()
     previous_peaks = wealth_index.cummax()
     drawdown = (wealth_index - previous_peaks) / previous_peaks
     
@@ -36,9 +36,8 @@ def max_drawdown(returns: pd.DataFrame) -> Tuple[float, pd.Timestamp, pd.Timesta
 
 def evaluate_strategy(portfolio_values: pd.DataFrame, against: pd.DataFrame) -> Dict:
     """Calculate all performance metrics for a strategy"""
-    portfolio_values = portfolio_values.loc[portfolio_values['date'].dt.weekday < 5].reset_index()
+    portfolio_values = portfolio_values[portfolio_values['date'].dt.weekday < 5].reset_index(drop=True, inplace=False)
     returns_cum = cumulative_returns(portfolio_values)
-    returns_rates = returns(portfolio_values)
     
     total_return = returns_cum['cumulative_return'].iloc[-1]
     days = (returns_cum['date'].iloc[-1] - returns_cum['date'].iloc[0]).days
@@ -47,9 +46,9 @@ def evaluate_strategy(portfolio_values: pd.DataFrame, against: pd.DataFrame) -> 
     
     against['DGS3MO'] /= 100
     against['observation_date'] = pd.to_datetime(against['observation_date'])
-    risk_free_rates = returns_rates.merge(against, left_on='date', right_on='observation_date', how='left').ffill()['DGS3MO']
+    risk_free_rates = returns_cum.merge(against, left_on='date', right_on='observation_date', how='left').ffill()['DGS3MO']
 
-    sharpe = sharpe_ratio(returns_rates, risk_free_rates)
+    sharpe = sharpe_ratio(returns_cum, risk_free_rates)
     max_dd, peak_date, trough_date = max_drawdown(returns_cum)
     
     return {

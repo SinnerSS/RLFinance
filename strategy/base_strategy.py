@@ -1,6 +1,6 @@
 import pandas as pd
 from abc import abstractmethod
-from typing import List, Dict, Optional 
+from typing import List, Dict, Union
 
 from utils.eval import evaluate_strategy
 from utils.monitor import monitor_time
@@ -14,9 +14,9 @@ class BaseStrategy:
         self,
         pool: List[str],
         data: pd.DataFrame,
+        start_date: Union[str, pd.Timestamp],
+        end_date: Union[str, pd.Timestamp],
         initial_capital: float = 10000.0,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
     ):
         """
         Initialize the base strategy.
@@ -30,8 +30,14 @@ class BaseStrategy:
         """
         self.pool = pool
         self.capital = initial_capital
-        self.start_date = pd.to_datetime(start_date)
-        self.end_date = pd.to_datetime(end_date)
+
+        if isinstance(start_date, str):
+            start_date = pd.to_datetime(start_date)
+
+        if isinstance(end_date, str):
+            end_date = pd.to_datetime(end_date)
+
+        self.start_date, self.end_date = start_date, end_date
         
         filtered_data = self._filter_date_range(data, self.start_date, self.end_date)
         self.stock_data = self._prepare_stock_data(filtered_data)
@@ -43,9 +49,9 @@ class BaseStrategy:
     def _filter_date_range(self, data: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         data['date'] = pd.to_datetime(data['date'])
         if start_date:
-            data = data.loc[data['date'] >= start_date]
+            data = data[data['date'] >= start_date]
         if end_date:
-            data = data.loc[data['date'] <= end_date]
+            data = data[data['date'] <= end_date]
         return data
             
     def _prepare_stock_data(self, data: pd.DataFrame) -> Dict:
@@ -139,7 +145,6 @@ class BaseStrategy:
         price = self._find_last_price(symbol, date)
         proceeds = shares_to_sell * price
         
-        # Update the portfolio
         position['shares'] -= shares_to_sell
         if position['shares'] <= 0:
             del self.portfolio[symbol]

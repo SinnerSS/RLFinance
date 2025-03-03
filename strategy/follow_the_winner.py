@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict, Union
 
 from .base_strategy import BaseStrategy
 
@@ -16,9 +16,9 @@ class MomentumFollowWinner(BaseStrategy):
         self,
         pool: List[str],
         data: pd.DataFrame,
+        start_date: Union[str, pd.Timestamp],
+        end_date: Union[str, pd.Timestamp],
         initial_capital: float = 10000.0,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
         lookback_period: int = 20,     
         top_n: int = 3,               
         rebalance_freq: int = 30     
@@ -36,7 +36,7 @@ class MomentumFollowWinner(BaseStrategy):
             top_n: Number of top performers to include
             rebalance_freq: Rebalance frequency in days
         """
-        super().__init__(pool, data, initial_capital, start_date, end_date)
+        super().__init__(pool, data, start_date, end_date, initial_capital)
         self.lookback_period = lookback_period
         self.top_n = min(top_n, len(pool))  
         self.rebalance_freq = rebalance_freq
