@@ -7,6 +7,7 @@ from loader.pool_loader import filter_stock
 from loader.price_loader import load_price_data
 from strategy.buy_and_hold import BuyAndHold
 from strategy.follow_the_winner import MomentumFollowWinner
+from strategy.follow_the_loser import MeanReversionFollowLoser
 
 def main():
     cf = Config()
@@ -44,15 +45,26 @@ def main():
         top_n=50
     )
 
+    ftl = MeanReversionFollowLoser(
+        pool,
+        price_data,
+        start_date=cf.start_date,
+        end_date=cf.end_date,
+        bottom_n=50
+    )
+
     history1 = bah_pool.execute()
     history2 = bah_snp.execute()
     history3 = ftw.execute()
+    history4 = ftl.execute()
     print(bah_pool.evaluate(against=baseline))
     print(bah_snp.evaluate(against=baseline))
     print(ftw.evaluate(against=baseline))
+    print(ftl.evaluate(against=baseline))
     plot_values(history1)
     plot_values(history2)
     plot_values(history3)
+    plot_values(history4)
 
 if __name__ == '__main__':
     main()
