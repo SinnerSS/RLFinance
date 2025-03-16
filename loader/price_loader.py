@@ -3,13 +3,13 @@ from pathlib import Path
 
 def load_price_data(pool: pd.DataFrame, data_dir: Path):
 
-    stock_symbols = pool['Stock_symbol'].tolist()
+    tics = pool['tic'].tolist()
     
     stock_list = []
-    for symbol in stock_symbols:
-        file_path = data_dir / f'{symbol}.csv'
+    for tic in tics:
+        file_path = data_dir / f'{tic}.csv'
         stock_price = pd.read_csv(file_path)
-        stock_price['Stock_symbol'] = symbol
+        stock_price['tic'] = tic
         stock_list.append(stock_price)
 
     price_data = pd.concat(stock_list, ignore_index=True)

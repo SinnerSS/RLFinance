@@ -40,7 +40,7 @@ def main():
     for chunk in tqdm(pd.read_csv(news_path, chunksize=10000), desc='Counting news by stock'):
         all_counts.update(news_by_stock(chunk))
 
-    news_counts = pd.DataFrame(all_counts.items(), columns=['Stock_symbol', 'Count'])
+    news_counts = pd.DataFrame(all_counts.items(), columns=['tic', 'count'])
     news_counts.to_csv(post_path / 'news_counts.csv', index=False)
 
     capitalize_files(price_path)

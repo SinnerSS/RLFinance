@@ -57,7 +57,7 @@ class BaseStrategy:
     def _prepare_stock_data(self, data: pd.DataFrame) -> Dict:
         stock_data = {}
         for symbol in self.pool:
-            stock_df = data[data['Stock_symbol'] == symbol]
+            stock_df = data[data['tic'] == symbol]
             if not stock_df.empty:
                 stock_data[symbol] = stock_df
         return stock_data

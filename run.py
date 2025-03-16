@@ -22,7 +22,7 @@ def main():
     pool = filter_stock(news_count, price_path, strategy='mixed', pool_size=500)
     price_data = load_price_data(pool, price_path)
 
-    pool = pool['Stock_symbol'].tolist()
+    pool = pool['tic'].tolist()
     bah_pool = BuyAndHold(
         pool,
         price_data,
