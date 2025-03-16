@@ -3,20 +3,23 @@ from pathlib import Path
 
 from config import Config
 from utils.plot import plot_values
+from loader.pool_loader import filter_stock
+from loader.price_loader import load_price_data
 from strategy.buy_and_hold import BuyAndHold
 from strategy.follow_the_winner import MomentumFollowWinner
 
 def main():
     cf = Config()
+
     post_path = cf.data_path / 'post'
-
-    pool_path = post_path / 'pool.csv'
-    price_path = post_path / 'price.csv'
     baseline_path = post_path / 'DGS3MO.csv'
+    price_path = cf.data_path / 'Stock_price/full_history'
 
-    pool = pd.read_csv(pool_path)
-    price_data = pd.read_csv(price_path)
+    news_count = pd.read_csv(post_path / 'news_counts.csv')
     baseline = pd.read_csv(baseline_path)
+
+    pool = filter_stock(news_count, price_path, strategy='mixed', pool_size=500)
+    price_data = load_price_data(pool, price_path)
 
     pool = pool['Stock_symbol'].tolist()
     bah_pool = BuyAndHold(
