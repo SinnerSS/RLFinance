@@ -1,6 +1,7 @@
 import pandas as pd
+from tqdm import tqdm
 from abc import abstractmethod
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 
 from utils.eval import evaluate_strategy
 from utils.monitor import monitor_time
@@ -12,10 +13,10 @@ class BaseStrategy:
     
     def __init__(
         self,
-        pool: List[str],
         data: pd.DataFrame,
         start_date: Union[str, pd.Timestamp],
         end_date: Union[str, pd.Timestamp],
+        pool: Optional[List[str]],
         initial_capital: float = 10000.0,
     ):
         """
@@ -28,7 +29,6 @@ class BaseStrategy:
             start_date: Optional start date (YYYY-MM-DD)
             end_date: Optional end date (YYYY-MM-DD)
         """
-        self.pool = pool
         self.capital = initial_capital
 
         if isinstance(start_date, str):
@@ -40,6 +40,10 @@ class BaseStrategy:
         self.start_date, self.end_date = start_date, end_date
         
         filtered_data = self._filter_date_range(data, self.start_date, self.end_date)
+        if pool:
+            self.pool = pool
+        else:
+            self.pool = filtered_data['tic'].unique()
         self.stock_data = self._prepare_stock_data(filtered_data)
         
         self.portfolio = {}
@@ -65,7 +69,7 @@ class BaseStrategy:
     @monitor_time
     def execute(self):
         dates = pd.date_range(self.start_date, self.end_date)
-        for date in dates:
+        for date in tqdm(dates, desc=f'Executing {self.__class__.__name__}'):
             self._update_strategy(date)
             self._update_portfolio(date)
             date_value = self._calculate_portfolio_value(date)

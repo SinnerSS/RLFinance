@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 
 from .base_strategy import BaseStrategy
 
@@ -14,10 +14,10 @@ class MomentumFollowWinner(BaseStrategy):
     
     def __init__(
         self,
-        pool: List[str],
         data: pd.DataFrame,
         start_date: Union[str, pd.Timestamp],
         end_date: Union[str, pd.Timestamp],
+        pool: Optional[List[str]] = None,
         initial_capital: float = 10000.0,
         lookback_period: int = 20,     
         top_n: int = 3,               
@@ -36,9 +36,9 @@ class MomentumFollowWinner(BaseStrategy):
             top_n: Number of top performers to include
             rebalance_freq: Rebalance frequency in days
         """
-        super().__init__(pool, data, start_date, end_date, initial_capital)
+        super().__init__(data, start_date, end_date, pool, initial_capital)
         self.lookback_period = lookback_period
-        self.top_n = min(top_n, len(pool))  
+        self.top_n = min(top_n, len(self.pool))  
         self.rebalance_freq = rebalance_freq
         self.last_rebalance_date = None
     
@@ -63,6 +63,7 @@ class MomentumFollowWinner(BaseStrategy):
                     self.plan[symbol] = self.capital * weight
                 
                 self.last_rebalance_date = date    
+
     def _calculate_momentum(self, current_date: pd.Timestamp) -> Dict[str, float]:
         """
         Calculate momentum scores for all stocks in the pool.

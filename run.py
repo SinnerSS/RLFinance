@@ -22,49 +22,45 @@ def main():
     pool = filter_stock(news_count, price_path, strategy='mixed', pool_size=500)
     price_data = load_price_data(pool, price_path)
 
-    pool = pool['tic'].tolist()
-    bah_pool = BuyAndHold(
-        pool,
-        price_data,
-        start_date=cf.start_date,
-        end_date=cf.end_date,
-    )
+    # bah_pool = BuyAndHold(
+    #     price_data,
+    #     start_date=cf.start_date,
+    #     end_date=cf.end_date,
+    # )
+    #
+    # bah_snp = BuyAndHold(
+    #     price_data,
+    #     start_date=cf.start_date,
+    #     end_date=cf.end_date,
+    #     pool=['SPY']
+    # )
+    # 
+    # ftw = MomentumFollowWinner(
+    #     price_data,
+    #     start_date=cf.start_date,
+    #     end_date=cf.end_date,
+    #     top_n=50
+    # )
+    #
+    # ftl = MeanReversionFollowLoser(
+    #     price_data,
+    #     start_date=cf.start_date,
+    #     end_date=cf.end_date,
+    #     bottom_n=50
+    # )
 
-    bah_snp = BuyAndHold(
-        ['SPY'],
-        price_data,
-        start_date=cf.start_date,
-        end_date=cf.end_date
-    )
-    
-    ftw = MomentumFollowWinner(
-        pool,
-        price_data,
-        start_date=cf.start_date,
-        end_date=cf.end_date,
-        top_n=50
-    )
-
-    ftl = MeanReversionFollowLoser(
-        pool,
-        price_data,
-        start_date=cf.start_date,
-        end_date=cf.end_date,
-        bottom_n=50
-    )
-
-    history1 = bah_pool.execute()
-    history2 = bah_snp.execute()
-    history3 = ftw.execute()
-    history4 = ftl.execute()
-    print(bah_pool.evaluate(against=baseline))
-    print(bah_snp.evaluate(against=baseline))
-    print(ftw.evaluate(against=baseline))
-    print(ftl.evaluate(against=baseline))
-    plot_values(history1)
-    plot_values(history2)
-    plot_values(history3)
-    plot_values(history4)
+    # history1 = bah_pool.execute()
+    # history2 = bah_snp.execute()
+    # history3 = ftw.execute()
+    # history4 = ftl.execute()
+    # print(bah_pool.evaluate(against=baseline))
+    # print(bah_snp.evaluate(against=baseline))
+    # print(ftw.evaluate(against=baseline))
+    # print(ftl.evaluate(against=baseline))
+    # plot_values(history1)
+    # plot_values(history2)
+    # plot_values(history3)
+    # plot_values(history4)
 
 if __name__ == '__main__':
     main()
