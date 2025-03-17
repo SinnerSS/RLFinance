@@ -5,7 +5,7 @@ from config import Config
 from utils.plot import plot_values
 from loader.pool_loader import filter_stock
 from loader.price_loader import load_price_data
-from strategy import BuyAndHold, MomentumFollowWinner, MeanReversionFollowLoser
+from strategy import BuyAndHold, MomentumFollowWinner, MeanReversionFollowLoser, AnticorStrategy
 
 def main():
     cf = Config()
@@ -47,18 +47,28 @@ def main():
     #     bottom_n=50
     # )
 
+    anticor = AnticorStrategy(
+        price_data,
+        start_date=cf.start_date,
+        end_date=cf.end_date,
+    )
+
+
     # history1 = bah_pool.execute()
     # history2 = bah_snp.execute()
     # history3 = ftw.execute()
     # history4 = ftl.execute()
+    history5 = anticor.execute()
     # print(bah_pool.evaluate(against=baseline))
     # print(bah_snp.evaluate(against=baseline))
     # print(ftw.evaluate(against=baseline))
     # print(ftl.evaluate(against=baseline))
+    print(anticor.evaluate(against=baseline))
     # plot_values(history1)
     # plot_values(history2)
     # plot_values(history3)
     # plot_values(history4)
+    plot_values(history5)
 
 if __name__ == '__main__':
     main()
