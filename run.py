@@ -5,9 +5,7 @@ from config import Config
 from utils.plot import plot_values
 from loader.pool_loader import filter_stock
 from loader.price_loader import load_price_data
-from strategy.buy_and_hold import BuyAndHold
-from strategy.follow_the_winner import MomentumFollowWinner
-from strategy.follow_the_loser import MeanReversionFollowLoser
+from strategy import BuyAndHold, MomentumFollowWinner, MeanReversionFollowLoser
 
 def main():
     cf = Config()
