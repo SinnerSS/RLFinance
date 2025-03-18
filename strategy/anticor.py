@@ -1,153 +1,103 @@
 import numpy as np
 import pandas as pd
-from typing import Union, List, Optional
+from typing import List, Dict, Union, Optional
 
-from strategy.base_strategy import BaseStrategy
+from .base_strategy import BaseStrategy
 
-class AnticorStrategy(BaseStrategy):
+
+class Anticor(BaseStrategy):
     """
-    Implementation of the ANTICOR (Anti-correlation) strategy.
-    
-    The strategy exploits negative correlation between assets over time,
-    transferring wealth from assets that performed well to those that performed poorly.
+    Anticor (anti-correlation) is a heuristic portfolio selection algorithm that adjusts the
+    portfolio based on the lagged correlations of asset returns. In particular, it shifts weight
+    from assets with lower recent performance to those with higher performance when there is
+    evidence of positive cross-correlation and negative autocorrelation.
+
+    Reference:
+        A. Borodin, R. El-Yaniv, and V. Gogan. Can we learn to beat the best stock, 2005.
+        http://www.cs.technion.ac.il/~rani/el-yaniv-papers/BorodinEG03.pdf
     """
-    
+
     def __init__(
-        self,
-        data: pd.DataFrame,
-        start_date: Union[str, pd.Timestamp],
-        end_date: Union[str, pd.Timestamp],
-        pool: Optional[List[str]] = None,
-        initial_capital: float = 10000.0,
-        window: int = 30,
-        rebalance_freq: int = 1
+        self, 
+        data: Dict[str, pd.DataFrame], 
+        start_date: Union[str, pd.Timestamp], 
+        end_date: Union[str, pd.Timestamp], 
+        pool: Optional[List[str]] = None, 
+        initial_capital: float = 10000.0, 
+        window: int = 30
     ):
         super().__init__(data, start_date, end_date, pool, initial_capital)
         self.window = window
-        self.rebalance_freq = rebalance_freq
-        self.last_rebalance_date = None
-    
-    def _update_strategy(self, date):
-        if self.last_rebalance_date is None or (date - self.last_rebalance_date).days >= self.rebalance_freq:
-            self._anticor_rebalance(date)
-            self.last_rebalance_date = date
-    
-    def _anticor_rebalance(self, date):
-        returns_data = self._get_historical_returns(date)
-        
-        if returns_data is None or returns_data.shape[1] < 2:
+        m = len(self.pool)
+        self.current_weights = np.full(m, 1.0 / m)
+
+    def _update_strategy(self, date: pd.Timestamp):
+        """
+        Update the strategy for the given date using the Anticor algorithm.
+        If there is insufficient historical data (i.e. fewer than 2*window days),
+        the strategy defaults to the current (or uniform) weights.
+        Otherwise, it computes the weights adjustment using the past 2*window days.
+        """
+        prices = self.data['adj_close']
+        try:
+            pos = prices.index.get_loc(date)
+        except KeyError:
             return
-        
-        weights = self._calculate_anticor_weights(returns_data)
-        
-        self._rebalance_portfolio(weights, date)
-    
-    def _get_historical_returns(self, date):
-        """Get historical returns for all stocks up to the current date"""
-        lookback = 2 * self.window
-        start_lookback = date - pd.Timedelta(days=lookback*2 + 1)
-        
-        price_data = {}
-        valid_symbols = []
-        
-        for symbol in self.pool:
-            symbol_data = self.stock_data.get(symbol)
-            if symbol_data is None:
-                continue
-                
-            hist_data = symbol_data[(symbol_data['date'] >= start_lookback) & 
-                                   (symbol_data['date'] <= date)]
-            
-            if len(hist_data) >= lookback:
-                price_data[symbol] = hist_data.set_index('date')['adj close']
-                valid_symbols.append(symbol)
-        
-        if not valid_symbols:
-            return None
-            
-        prices_df = pd.DataFrame(price_data)
-        prices_df = prices_df.sort_index().iloc[-lookback:]
-        
-        if prices_df.shape[1] < 2:
-            return None
-            
-        returns_df = prices_df.pct_change()
-        return returns_df
-    
-    def _calculate_anticor_weights(self, returns_data):
-        """Calculate ANTICOR weights based on returns data"""
-        n_assets = returns_data.shape[1]
-        symbols = returns_data.columns
 
-        # Get two windows of data (as DataFrames)
-        window1 = returns_data.iloc[:self.window]
-        window2 = returns_data.iloc[self.window:]
-        
-        # Convert to numpy arrays for faster math (each column is one asset)
-        X1 = window1.values  # shape: (self.window, n_assets)
-        X2 = window2.values  # shape: (len(window2), n_assets)
+        m = len(self.pool)
+        if pos < 2 * self.window:
+            self.plan = {symbol: self.current_weights[i] * self.capital for i, symbol in enumerate(self.pool)}
+            return
 
-        # 1. Compute the full correlation matrix for window1
-        # (this uses pandas vectorized computation under the hood)
-        C = window1.corr().values  # shape: (n_assets, n_assets)
+        window_data = prices.iloc[pos - 2 * self.window : pos]
+        first_window = window_data.iloc[:self.window]
+        second_window = window_data.iloc[self.window:]
 
-        # 2. Compute the correlation between each asset's returns in window1 and window2.
-        # We use vectorized operations:
-        # Compute means and standard deviations (ddof=1 for sample std)
-        mu1 = np.mean(X1, axis=0)  # shape: (n_assets,)
-        mu2 = np.mean(X2, axis=0)
-        std1 = np.std(X1, axis=0, ddof=1)
-        std2 = np.std(X2, axis=0, ddof=1)
-        # Compute covariance between corresponding columns
-        # Note: subtracting mu1 and mu2 will broadcast over rows.
-        cov12 = np.sum((X1 - mu1) * (X2 - mu2), axis=0) / (X1.shape[0] - 1)
-        r_between = cov12 / (std1 * std2)  # shape: (n_assets,)
+        r_first = first_window.pct_change().dropna()
+        r_second = second_window.pct_change().dropna()
 
-        # 3. Get the mean returns for window2 (as a 1D numpy array)
-        m2 = window2.mean().values  # shape: (n_assets,)
+        if r_first.shape[0] < 1 or r_second.shape[0] < 1:
+            self.plan = {symbol: self.current_weights[i] * self.capital for i, symbol in enumerate(self.pool)}
+            return
 
-        # Build a boolean mask using broadcasting.
-        # For each pair (i,j):
-        #   condition1: C[i,j] < 0
-        #   condition2: r_between[i] > 0 and r_between[j] > 0
-        #   condition3: m2[i] < m2[j]
-        mask = (C < 0) & (r_between[:, None] > 0) & (r_between[None, :] > 0) & (m2[:, None] < m2[None, :])
+        M = np.zeros((m, m))
+        for i in range(m):
+            for j in range(m):
+                ri = r_first.iloc[:, i].values
+                rj = r_second.iloc[:, j].values
+                if np.std(ri) == 0 or np.std(rj) == 0:
+                    M[i, j] = 0.0
+                else:
+                    M[i, j] = np.corrcoef(ri, rj)[0, 1]
 
-        # Claim matrix: where mask is True, use absolute value of C; else zero.
-        claim_matrix = np.where(mask, np.abs(C), 0)
+        mu = r_second.mean(axis=0).values
 
-        # Sum over rows and columns.
-        row_sums = claim_matrix.sum(axis=1)
-        col_sums = claim_matrix.sum(axis=0)
-        total_claims = claim_matrix.sum()
+        claim = np.zeros((m, m))
+        for i in range(m):
+            for j in range(m):
+                if i == j:
+                    continue
+                if mu[i] > mu[j] and M[i, j] > 0:
+                    claim[i, j] = M[i, j]
+                    if M[i, i] < 0:
+                        claim[i, j] += abs(M[i, i])
+                    if M[j, j] < 0:
+                        claim[i, j] += abs(M[j, j])
 
-        # Compute weights.
-        weights = {}
-        if total_claims > 0:
-            for i, symbol in enumerate(symbols):
-                weight = (col_sums[i] - row_sums[i]) / total_claims
-                weights[symbol] = max(0, weight)
+        transfer = np.zeros((m, m))
+        for i in range(m):
+            total_claim = claim[i, :].sum()
+            if total_claim != 0:
+                transfer[i, :] = self.current_weights[i] * claim[i, :] / total_claim
+
+        new_weights = self.current_weights + transfer.sum(axis=0) - transfer.sum(axis=1)
+        new_weights[new_weights < 0] = 0
+        total = new_weights.sum()
+        if total > 0:
+            new_weights = new_weights / total
         else:
-            for symbol in symbols:
-                weights[symbol] = 1.0 / n_assets
+            new_weights = np.full(m, 1.0 / m)
 
-        # Normalize weights so they sum to 1.
-        total_weight = sum(weights.values())
-        if total_weight > 0:
-            for symbol in weights:
-                weights[symbol] /= total_weight
+        self.current_weights = new_weights
+        self.plan = {symbol: new_weights[i] * self.capital for i, symbol in enumerate(self.pool)}
 
-        return weights    
-
-    def _rebalance_portfolio(self, weights, date):
-        """Rebalance portfolio according to weights"""
-        current_value = self._calculate_portfolio_value(date)
-        
-        for symbol in list(self.portfolio.keys()):
-            proceeds = self.sell_position(symbol, 1.0, date)
-            self.capital += proceeds
-        
-        for symbol, weight in weights.items():
-            if weight > 0:
-                allocation = current_value * weight
-                self.plan[symbol] = allocation

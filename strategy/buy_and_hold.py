@@ -10,7 +10,7 @@ class BuyAndHold(BaseStrategy):
     
     def __init__(
         self,
-        data: pd.DataFrame,
+        data: Dict[str, pd.DataFrame],
         start_date: Union[str, pd.Timestamp],
         end_date: Union[str, pd.Timestamp],
         pool: Optional[List[str]] = None,
@@ -21,21 +21,18 @@ class BuyAndHold(BaseStrategy):
         Initialize the buy and hold strategy.
         
         Args:
-            pool: Pool of stock symbols
-            data: Stock price dataframe
-            initial_capital: Starting capital
-            start_date: Optional start date (YYYY-MM-DD)
-            end_date: Optional end date (YYYY-MM-DD)
-            equal_weight: If True, equal allocation; else, weighted by Count
+            data: Dictionary of price DataFrames with keys like 'open' and 'adj_close'
+            start_date: Start date for the strategy
+            end_date: End date for the strategy
+            pool: Optional list of stock symbols. Defaults to all columns in 'adj_close'
+            initial_capital: Starting capital for the portfolio
+            equal_weight: If True, allocate equal weights to each stock in the pool.
         """
         super().__init__(data, start_date, end_date, pool, initial_capital)
         self.equal_weight = equal_weight
         
     def _update_strategy(self, date: pd.Timestamp):
-        """
-        Buy and hold strategy only makes allocation decisions once at the start.
-        """
-        if date == self.start_date:
+        if date == self.data['open'].index[0]:
             weights = self._calculate_weights()
             for symbol, weight in weights.items():
                 self.plan[symbol] = self.capital * weight
@@ -43,9 +40,10 @@ class BuyAndHold(BaseStrategy):
     def _calculate_weights(self) -> Dict[str, float]:
         weights = {}
         if self.equal_weight:
-            weight_per_stock = 1.0 / len(self.stock_data)
-            for symbol in self.stock_data:
+            weight_per_stock = 1.0 / len(self.pool)
+            for symbol in self.pool:
                 weights[symbol] = weight_per_stock
         else:
-            pass
+            raise NotImplementedError("Custom weighted allocation not implemented.")
         return weights
+
