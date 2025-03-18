@@ -11,7 +11,7 @@ class Config:
     data_path: Path = field(default_factory=lambda: Path('data').resolve()) 
     result_path: Path = field(default_factory=lambda: Path('result').resolve())
 
-    start_date: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2018-01-01'))
+    start_date: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2021-01-01'))
     end_date: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2023-01-01'))
 
     def __post_init__(self):
