@@ -1,32 +1,36 @@
 import argparse
 import pandas as pd
 
+import torch
+from sklearn.preprocessing import MaxAbsScaler
+from finrl.meta.preprocessor.preprocessors import GroupByScaler
+from finrl.agents.portfolio_optimization.models import DRLAgent
+from finrl.agents.portfolio_optimization.architectures import EIIE
+from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
+
 from config import Config
 from utils.plot import plot_values
 from loader.pool_loader import filter_stock
-from loader.price_loader import load_price_data
+from loader.price_loader import load_price_strategy, load_price_model
 from strategy import BuyAndHold, Anticor, UniversalPortfolio, NearestNeighbor, Corn
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategies analysis.')
     parser.add_argument('--strategy', action='store_true', help='Execute all available strategy')
+    parser.add_argument('--model', action='store_true', help='Execute model')
     args = parser.parse_args()
     cf = Config()
 
     post_path = cf.data_path / 'post'
     baseline_path = post_path / 'DGS3MO.csv'
     price_path = cf.data_path / 'Stock_price/full_history'
+    baseline = pd.read_csv(baseline_path)
+    with open("default_pool.txt", "r") as file:
+        pool = [line.strip() for line in file if line.strip()]
 
 
     if args.strategy:
-        # news_count = pd.read_csv(post_path / 'news_counts.csv')
-        baseline = pd.read_csv(baseline_path)
-
-        with open("default_pool.txt", "r") as file:
-            pool = [line.strip() for line in file if line.strip()]
-
-        # pool = filter_stock(news_count, price_path, strategy='mixed', pool_size=500)
-        price_data = load_price_data(pool + ['SPY'], price_path)
+        price_data = load_price_strategy(pool + ['SPY'], price_path)
 
         bah_pool = BuyAndHold(
             price_data,
@@ -97,6 +101,32 @@ def main():
         plot_values(history4) 
         plot_values(history5)
         plot_values(history6)
+    
+    if args.model:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        price_data = load_price_model(pool, price_path)
+        price_norm_data = GroupByScaler(by="tic", scaler=MaxAbsScaler).fit_transform(price_data)
 
+        price_norm_data = price_norm_data[['date', 'tic', 'close', 'high', 'low']]
+        env = PortfolioOptimizationEnv(
+            price_norm_data,
+            initial_amount=10000,
+            time_window=50,
+            features=['close', 'high', 'low'],
+            normalize_df=None
+        )
+
+        model_kwargs = {
+            "lr": 0.01,
+            "policy": EIIE,
+        }
+
+        policy_kwargs = {
+            "k_size": 3,
+            "time_window": 50,
+        }
+
+        model = DRLAgent(env).get_model("pg", device, model_kwargs, policy_kwargs)
+        DRLAgent.train_model(model, episodes=100)
 if __name__ == '__main__':
     main()
