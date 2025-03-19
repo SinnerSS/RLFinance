@@ -50,8 +50,8 @@ def main():
         price_data,
         start_date=cf.start_date,
         end_date=cf.end_date,
-        k=5,
-        l=10,
+        k=10,
+        l=30,
         rebalance_freq='W-FRI',
         max_leverage=1.0,
         metric='return'
@@ -67,6 +67,8 @@ def main():
         price_data,
         start_date=cf.start_date,
         end_date=cf.end_date,
+        rho=0.1,
+        window=10,
         version='fast'
     )
 
@@ -74,21 +76,21 @@ def main():
     # history1 = bah_pool.execute()
     # history2 = bah_snp.execute()
     # history3 = up.execute()
-    history4 = nn.execute()
+    # history4 = nn.execute()
     # history5 = anticor.execute()
     history6 = corn.execute()
 
     # print(bah_pool.evaluate(against=baseline))
     # print(bah_snp.evaluate(against=baseline))
     # print(up.evaluate(against=baseline))
-    print(nn.evaluate(against=baseline))
+    # print(nn.evaluate(against=baseline))
     # print(anticor.evaluate(against=baseline))
     print(corn.evaluate(against=baseline))
 
     # plot_values(history1)
     # plot_values(history2)
     # plot_values(history3)
-    plot_values(history4) 
+    # plot_values(history4) 
     # plot_values(history5)
     plot_values(history6)
 
