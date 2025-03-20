@@ -107,6 +107,7 @@ def main():
         price_norm_data = GroupByScaler(by="tic", scaler=MaxAbsScaler).fit_transform(price_data)
 
         price_norm_data = price_norm_data[['date', 'tic', 'close', 'high', 'low']]
+        price_norm_data['date'] = pd.to_datetime(price_norm_data['date'])
 
         train_data = price_norm_data[(price_norm_data['date'] >= cf.start_train) & (price_norm_data['date'] <= cf.end_train)]
         test_data = price_norm_data[(price_norm_data['date'] >= cf.start_test) & (price_norm_data['date'] <= cf.end_test)] 
