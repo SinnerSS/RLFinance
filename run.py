@@ -10,7 +10,6 @@ from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import Por
 
 from config import Config
 from utils.plot import plot_values
-from loader.pool_loader import filter_stock
 from loader.price_loader import load_price_strategy, load_price_model
 from strategy import BuyAndHold, Anticor, UniversalPortfolio, NearestNeighbor, Corn
 
@@ -34,21 +33,21 @@ def main():
 
         bah_pool = BuyAndHold(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
         )
 
         bah_snp = BuyAndHold(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
             pool=['SPY']
         )
 
         up = UniversalPortfolio(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
             num_candidates=100,
             beta=2,
             seed=42,
@@ -56,8 +55,8 @@ def main():
 
         nn = NearestNeighbor(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
             k=10,
             l=30,
             rebalance_freq='W-FRI',
@@ -67,14 +66,14 @@ def main():
 
         anticor = Anticor(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
         )
 
         corn = Corn(
             price_data,
-            start_date=cf.start_date,
-            end_date=cf.end_date,
+            start_date=cf.start_test,
+            end_date=cf.end_test,
             rho=0.1,
             window=10,
             version='fast'
@@ -108,8 +107,19 @@ def main():
         price_norm_data = GroupByScaler(by="tic", scaler=MaxAbsScaler).fit_transform(price_data)
 
         price_norm_data = price_norm_data[['date', 'tic', 'close', 'high', 'low']]
-        env = PortfolioOptimizationEnv(
-            price_norm_data,
+
+        train_data = price_norm_data[(price_norm_data['date'] >= cf.start_train) & (price_norm_data['date'] <= cf.end_train)]
+        test_data = price_norm_data[(price_norm_data['date'] >= cf.start_test) & (price_norm_data['date'] <= cf.end_test)] 
+
+        train_env = PortfolioOptimizationEnv(
+            train_data,
+            initial_amount=10000,
+            time_window=50,
+            features=['close', 'high', 'low'],
+            normalize_df=None
+        )
+        test_env = PortfolioOptimizationEnv(
+            test_data,
             initial_amount=10000,
             time_window=50,
             features=['close', 'high', 'low'],
@@ -126,7 +136,11 @@ def main():
             "time_window": 50,
         }
 
-        model = DRLAgent(env).get_model("pg", device, model_kwargs, policy_kwargs)
+        model = DRLAgent(train_env).get_model("pg", device, model_kwargs, policy_kwargs)
         DRLAgent.train_model(model, episodes=100)
+
+        
+        DRLAgent.DRL_validation(model, test_env)
+
 if __name__ == '__main__':
     main()
