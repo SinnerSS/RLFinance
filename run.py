@@ -1,3 +1,4 @@
+import csv 
 import argparse
 import pandas as pd
 
@@ -87,19 +88,32 @@ def main():
         history5 = anticor.execute()
         history6 = corn.execute()
 
-        print(bah_pool.evaluate(against=baseline))
-        print(bah_snp.evaluate(against=baseline))
-        print(up.evaluate(against=baseline))
-        print(nn.evaluate(against=baseline))
-        print(anticor.evaluate(against=baseline))
-        print(corn.evaluate(against=baseline))
 
-        plot_values(history1)
-        plot_values(history2)
-        plot_values(history3)
-        plot_values(history4) 
-        plot_values(history5)
-        plot_values(history6)
+        csv_file = cf.result_path / "evaluation_metrics.csv"
+
+        data = [
+            {"parameter_name": "bah_pool", **bah_pool.evaluate(against=baseline)},
+            {"parameter_name": "bah_snp", **bah_snp.evaluate(against=baseline)},
+            {"parameter_name": "up", **up.evaluate(against=baseline)},
+            {"parameter_name": "nn", **nn.evaluate(against=baseline)},
+            {"parameter_name": "anticor", **anticor.evaluate(against=baseline)},
+            {"parameter_name": "corn", **corn.evaluate(against=baseline)},
+        ]
+
+        headers = list(data[0].keys())
+
+        with open(csv_file, mode="w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(data)
+
+        history1.to_csv(cf.result_path / 'bahp_history.csv')
+        history2.to_csv(cf.result_path / 'bahs_history.csv')
+        history3.to_csv(cf.result_path / 'up_history.csv')
+        history4.to_csv(cf.result_path / 'nn_history.csv')
+        history5.to_csv(cf.result_path / 'anticor_history.csv')
+        history6.to_csv(cf.result_path / 'corn_history.csv')
+
     
     if args.model:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
