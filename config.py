@@ -11,7 +11,7 @@ class Config:
     data_path: Path = field(default_factory=lambda: Path('data').resolve()) 
     result_path: Path = field(default_factory=lambda: Path('result').resolve())
 
-    start_train: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2018-01-01'))
+    start_train: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2016-01-01'))
     end_train: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2020-12-31'))
     start_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2021-01-01'))
     end_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2022-12-31'))
