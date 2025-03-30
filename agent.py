@@ -2,6 +2,7 @@ import os
 import time
 import random
 import argparse
+from tqdm import tqdm
 from distutils.util import strtobool
 
 import gymnasium as gym 
@@ -352,7 +353,7 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
     print(f"Starting training for {num_updates} updates...")
 
-    for update in range(1, num_updates + 1):
+    for update in tqdm(range(1, num_updates + 1)):
         # Learning rate annealing
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / num_updates
