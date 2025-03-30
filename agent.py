@@ -38,13 +38,13 @@ def parse_args():
                         help="whether to capture videos of the agent performances (check out `videos` folder)")
 
     parser.add_argument("--data-path", type=str, required=True, help="path to the csv file containing stock data")
-    parser.add_argument("--total-timesteps", type=int, default=2000000, # Adjust as needed
+    parser.add_argument("--total-timesteps", type=int, default=500000, # Adjust as needed
                         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=3e-4, 
                         help="the learning rate of the optimizer")
     parser.add_argument("--num-envs", type=int, default=1, # Portfolio env usually doesn't parallelize well naively unless data is split
                         help="the number of parallel game environments")
-    parser.add_argument("--num-steps", type=int, default=2048, # PPO buffer size per env
+    parser.add_argument("--num-steps", type=int, default=1024, # PPO buffer size per env
                         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
                         help="Toggle learning rate annealing for policy and value networks")
@@ -54,7 +54,7 @@ def parse_args():
                         help="the lambda for the general advantage estimation")
     parser.add_argument("--num-minibatches", type=int, default=32,
                         help="the number of mini-batches")
-    parser.add_argument("--update-epochs", type=int, default=10,
+    parser.add_argument("--update-epochs", type=int, default=5,
                         help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
                         help="Toggles advantages normalization")
