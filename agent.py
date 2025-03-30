@@ -113,56 +113,42 @@ def parse_args():
     return args
 
 
-def make_env(args, seed, idx, run_name, data_period=None, eval_mode=False):
+def make_env(raw_df, args, seed, idx, run_name, data_period, eval_mode=False):
     def thunk():
-        print(f"Loading data from: {args.data_path}")
-        raw_df = pd.read_csv(args.data_path)
-
         time_col = args.time_column
-        raw_df[time_col] = pd.to_datetime(raw_df[time_col]) # Ensure datetime format
-
-        if data_period:
-            start_date_str, end_date_str = data_period
-            print(f"Filtering data for period: {start_date_str} to {end_date_str}")
-        else: # Default to training period if not specified
-            start_date_str, end_date_str = args.train_start_date, args.train_end_date
-            print(f"Filtering data for TRAINING period: {start_date_str} to {end_date_str}")
+        
+        start_date_str, end_date_str = data_period
+        env_log_suffix = "eval" if eval_mode else f"train_{idx}"
+        print(f"Env {env_log_suffix}: Filtering data for period: {start_date_str} to {end_date_str}")
 
         start_date = pd.to_datetime(start_date_str)
         end_date = pd.to_datetime(end_date_str)
 
-        # Filter the dataframe
         filtered_df = raw_df[(raw_df[time_col] >= start_date) & (raw_df[time_col] <= end_date)].copy()
 
         if filtered_df.empty:
-             raise ValueError(f"No data found for the specified period: {start_date_str} to {end_date_str}. Check dates and data file.")
-        # --- END ADDED ---
-        # --- Feature Engineering ---
-        # Assuming FeatureEngineer needs to be instantiated and used
-        # If FeatureEngineer has arguments, pass them from args
+             raise ValueError(f"Env {env_log_suffix}: No data found for the specified period: {start_date_str} to {end_date_str}. "
+                              "Check train dates, data file, and num_envs vs data length.")
+        if filtered_df[time_col].nunique() < args.time_window + 1:
+             raise ValueError(f"Env {env_log_suffix}: Data period {start_date_str} to {end_date_str} "
+                              f"has {filtered_df[time_col].nunique()} unique days, "
+                              f"which is less than the required time_window ({args.time_window}) + 1. "
+                              "Reduce num_envs or increase training data range.")
+
         fe = FeatureEngineer(
             use_technical_indicator=args.use_technical_indicator,
             tech_indicator_list=INDICATORS,
-            # use_vix=False, # Example, control via args if needed
-            # use_turbulence=False, # Example, control via args if needed
-            # user_defined_feature=False # Example, control via args if needed
         )
-        print("Preprocessing data with FeatureEngineer...")
+        print(f"Env {env_log_suffix}: Preprocessing data segment with FeatureEngineer...")
         processed_df = fe.preprocess_data(filtered_df)
-        print("Data preprocessing complete.")
+        print(f"Env {env_log_suffix}: Data segment preprocessing complete.")
 
-        # --- Determine Features ---
-        # If FE added features, update the list
-        # Example: Detect technical indicators added by default FE setup
         current_features = list(args.features)
-        # This part needs customization based on how FeatureEngineer exactly modifies the df
         if args.use_technical_indicator:
             for indicator in INDICATORS:
                 if indicator in processed_df.columns and indicator not in current_features:
                     current_features.append(indicator)
-        print(f"Using features: {current_features}")
 
-        env_log_suffix = "eval" if eval_mode else f"train_{idx}"
         env_kwargs = {
             "df": processed_df,
             "initial_amount": args.initial_amount,
@@ -175,23 +161,61 @@ def make_env(args, seed, idx, run_name, data_period=None, eval_mode=False):
             "tic_column": args.tic_column,
             "normalize_df": args.normalize_df if args.normalize_df != "none" else None,
             "return_last_action": args.return_last_action,
-            "order_df": False, # FE likely handles sorting
-            "comission_fee_model": "trf", # or 'wvm' or None
-            "cwd": f"runs/{run_name}/env_logs_{env_log_suffix}", 
+            "order_df": False, 
+            "comission_fee_model": "trf",
+            "cwd": f"runs/{run_name}/env_logs_{env_log_suffix}",
+            "render_mode": "human" if args.capture_video and idx == 0 and not eval_mode else None,
         }
-        env = PortfolioOptimizationEnv(**env_kwargs)
+        try:
+            env = PortfolioOptimizationEnv(**env_kwargs)
+        except Exception as e:
+            print(f"Error creating PortfolioOptimizationEnv for segment {start_date_str} to {end_date_str}: {e}")
+            print(f"Processed DF head:\n{processed_df.head()}")
+            print(f"Processed DF tail:\n{processed_df.tail()}")
+            print(f"Processed DF info:\n")
+            processed_df.info()
+            raise e
+
 
         # --- Wrappers ---
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        # Add other wrappers if needed, e.g., for video recording
-        # if args.capture_video and idx == 0:
-        #     env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+        # Video recording wrapper - adjust condition if needed
+        # if args.capture_video and idx == 0 and not eval_mode:
+        #     env = gym.wrappers.RecordVideo(env, f"videos/{run_name}/train_{idx}")
 
         env.action_space.seed(seed)
-        # Note: PortfolioOptimizationEnv handles its own observation seeding internally if needed
         # env.observation_space.seed(seed) # Not standard for Box/Dict spaces
         return env
     return thunk
+
+def split_dates(unique_dates, n_splits):
+    total_days = len(unique_dates)
+    if total_days < n_splits:
+        raise ValueError(f"Cannot split {total_days} unique dates into {n_splits} segments. Reduce num_envs.")
+
+    base_segment_len = total_days // n_splits
+    remainder = total_days % n_splits
+
+    split_points = []
+    current_idx = 0
+    for i in range(n_splits):
+        segment_len = base_segment_len + (1 if i < remainder else 0)
+        start_idx = current_idx
+        end_idx = current_idx + segment_len - 1 # Inclusive index
+        if end_idx >= total_days: end_idx = total_days - 1 # Ensure not out of bounds
+
+        split_points.append((unique_dates[start_idx], unique_dates[end_idx]))
+        current_idx += segment_len
+
+    # Sanity check: ensure last segment ends on the last date
+    if n_splits > 0 and current_idx != total_days:
+         print(f"Warning: Date split mismatch. current_idx={current_idx}, total_days={total_days}. Adjusting last segment.")
+         # Adjust the end date of the last segment if logic was off
+         start_date, _ = split_points[-1]
+         split_points[-1] = (start_date, unique_dates[-1])
+
+
+    return split_points
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -298,12 +322,57 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     print(f"Using device: {device}")
 
+    print(f"Loading main data from: {args.data_path}")
+    raw_df_main = pd.read_csv(args.data_path)
+    # Convert time column ONCE
+    raw_df_main[args.time_column] = pd.to_datetime(raw_df_main[args.time_column])
+    raw_df_main.sort_values(by=[args.time_column, args.tic_column], inplace=True)
+    
     # --- Environment Setup ---
     print("\n" + "="*20 + " STARTING TRAINING PHASE " + "="*20)
     print(f"Training Period: {args.train_start_date} to {args.train_end_date}")
-    train_envs = gym.vector.SyncVectorEnv(
-        [make_env(args, args.seed + i, i, run_name) for i in range(args.num_envs)]
-    )
+    print(f"Number of parallel environments: {args.num_envs}")
+
+    train_start = pd.to_datetime(args.train_start_date)
+    train_end = pd.to_datetime(args.train_end_date)
+    train_df_full = raw_df_main[(raw_df_main[args.time_column] >= train_start) & (raw_df_main[args.time_column] <= train_end)]
+
+    if train_df_full.empty:
+        raise ValueError(f"No training data found between {args.train_start_date} and {args.train_end_date}")
+
+    unique_training_dates = sorted(train_df_full[args.time_column].unique())
+    print(f"Total unique training days: {len(unique_training_dates)}")
+
+    if args.num_envs > 1:
+        try:
+            date_segments = split_dates(unique_training_dates, args.num_envs)
+            print("Calculated date segments for parallel environments:")
+            for i, (start, end) in enumerate(date_segments):
+                print(f"  Env {i}: {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}")
+        except ValueError as e:
+            print(f"Error splitting dates: {e}")
+            print("Consider reducing --num-envs or increasing the training date range.")
+            exit() 
+    else:
+        date_segments = [(pd.to_datetime(args.train_start_date), pd.to_datetime(args.train_end_date))]
+
+    train_env_fns = []
+    for i in range(args.num_envs):
+        segment_start_str = date_segments[i][0].strftime('%Y-%m-%d')
+        segment_end_str = date_segments[i][1].strftime('%Y-%m-%d')
+        train_env_fns.append(
+            make_env(
+                raw_df=raw_df_main, 
+                args=args,
+                seed=args.seed + i,
+                idx=i,
+                run_name=run_name,
+                data_period=(segment_start_str, segment_end_str), 
+                eval_mode=False
+            )
+        )
+
+    train_envs = gym.vector.SyncVectorEnv(train_env_fns)
     assert isinstance(train_envs.single_action_space, gym.spaces.Box), "This PPO script only supports Box action space (continuous actions)"
 
     print("Observation Space:", train_envs.single_observation_space)
@@ -351,6 +420,7 @@ if __name__ == "__main__":
 
     next_done = torch.zeros(args.num_envs).to(device)
     num_updates = args.total_timesteps // args.batch_size
+    print(f"Total timesteps: {args.total_timesteps}, Batch size: {args.batch_size}")
     print(f"Starting training for {num_updates} updates...")
 
     for update in tqdm(range(1, num_updates + 1)):
@@ -384,37 +454,39 @@ if __name__ == "__main__":
             # Execute action in environment
             # Ensure action is in numpy cpu format for env.step
             action_np = action.cpu().numpy()
-            next_obs, reward, terminated, truncated, info = train_envs.step(action_np) # New API returns 5 values
-            done = np.logical_or(terminated, truncated) # Combine termination conditions
-
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            next_obs_tuple, reward_tuple, terminated_tuple, truncated_tuple, info = train_envs.step(action_np) # New API returns 5 values
+            done_tuple = np.logical_or(terminated_tuple, truncated_tuple)
+            
+            rewards[step] = torch.tensor(reward_tuple).to(device).view(-1)
 
             # Convert next observation and done flag to tensor and move to device
             if isinstance(obs_space, gym.spaces.Dict):
-                next_obs = {k: torch.Tensor(v).to(device) for k, v in next_obs.items()}
+                next_obs = {k: torch.Tensor(v).to(device) for k, v in next_obs_tuple.items()}
             else:
-                 next_obs = torch.Tensor(next_obs).to(device)
-            next_done = torch.Tensor(done).to(device)
+                 next_obs = torch.Tensor(next_obs_tuple).to(device)
+            next_done = torch.Tensor(done_tuple).to(device)
 
 
             # Log episode statistics if available (from RecordEpisodeStatistics wrapper)
             if "final_info" in info:
-                 for item in info["final_info"]:
-                     if item and "episode" in item: # Check if item is not None and contains 'episode'
+                final_infos = info["_final_info"]
+                finished_envs_mask = info["_final_info"] # Boolean mask for finished envs
+                for item in final_infos[finished_envs_mask]:
+                    if item and "episode" in item: # Check if item is not None and contains 'episode'
                         print(f"global_step={global_step}, episodic_return={item['episode']['r']:.2f}, episodic_length={item['episode']['l']}")
                         writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
                         writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
                         # Log final portfolio value if the env provides it in info
                         if "final_portfolio_value" in item:
-                             writer.add_scalar("charts/final_portfolio_value", item["final_portfolio_value"], global_step)
-                        break # Process only the first valid episode info if multiple envs finish
-
+                            writer.add_scalar("charts/final_portfolio_value", item["final_portfolio_value"], global_step)
+                        elif 'final_portfolio_info' in item and 'final_value' in item['final_portfolio_info']: # Check nested structure if env adds it differently
+                            writer.add_scalar("charts/final_portfolio_value", item['final_portfolio_info']['final_value'], global_step)
 
         # --- Advantage Calculation (GAE) ---
         with torch.no_grad():
              # Pass the correct observation structure (dict or tensor)
             next_obs_for_agent = {k: next_obs[k] for k in obs_space.spaces.keys()} if isinstance(obs_space, gym.spaces.Dict) else next_obs
-            next_value = agent.get_value(next_obs_for_agent).reshape(1, -1)
+            next_value = agent.get_value(next_obs_for_agent).reshape(1, args.num_envs)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
             for t in reversed(range(args.num_steps)):
@@ -424,7 +496,8 @@ if __name__ == "__main__":
                 else:
                     nextnonterminal = 1.0 - dones[t + 1]
                     nextvalues = values[t + 1]
-                delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
+                current_nextvalues = nextvalues.flatten() # Ensure shape (num_envs,)
+                delta = rewards[t] + args.gamma * current_nextvalues * nextnonterminal - values[t]
                 advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
             returns = advantages + values
 
@@ -460,7 +533,7 @@ if __name__ == "__main__":
                     mb_obs = b_obs[mb_inds]
 
                 # Pass correct obs structure to agent
-                newaction, newlogprob, entropy, newvalue = agent.get_action_and_value(mb_obs, b_actions[mb_inds])
+                _, newlogprob, entropy, newvalue = agent.get_action_and_value(mb_obs, b_actions[mb_inds])
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
 
@@ -502,9 +575,9 @@ if __name__ == "__main__":
                 nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
-            if args.target_kl is not None:
-                if approx_kl > args.target_kl:
-                    break
+            if args.target_kl is not None and approx_kl > args.target_kl:
+                print(f"Early stopping at epoch {epoch+1} due to reaching target KL {approx_kl:.4f} > {args.target_kl:.4f}")
+                break
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
