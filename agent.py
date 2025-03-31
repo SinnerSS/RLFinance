@@ -605,9 +605,16 @@ if __name__ == "__main__":
 
     # Create a single test environment
     # Use a different seed for test env if desired, e.g., args.seed + args.num_envs
-    test_env = make_env(args, args.seed + args.num_envs, 0, run_name,
-                       data_period=(args.test_start_date, args.test_end_date),
-                       eval_mode=True)() # Call the thunk to get the env instance
+    test_env_thunk = make_env(
+        raw_df=raw_df_main, # Use the same pre-loaded raw data
+        args=args,
+        seed=args.seed + args.num_envs, # Use a different seed for test env
+        idx=0, # Test env index 0
+        run_name=run_name,
+        data_period=(args.test_start_date, args.test_end_date), # Full test period
+        eval_mode=True # Set eval_mode flag
+    )
+    test_env = test_env_thunk()
 
     agent.eval()  # Set agent to evaluation mode (e.g., affects dropout, batch norm)
 
