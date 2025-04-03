@@ -150,19 +150,19 @@ def main():
         val_env = LoggedPortfolioOptimizationEnv(df=val_data.copy(), **env_kwargs)
         test_env = LoggedPortfolioOptimizationEnv(df=test_data.copy(), **env_kwargs)
 
-        policy_kwargs_eii_e = {
+        policy_kwargs = {
             "initial_features": len(env_kwargs["features"]),
             "time_window": env_kwargs["time_window"],
+            "device": device
         }
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         log_directory = "./result/portfolio_ppo"
 
         agent = PPOAgent(
             env=train_env,
             validation_env=val_env,
             policy_class=EIIE,
-            policy_kwargs=policy_kwargs_eii_e,
+            policy_kwargs=policy_kwargs,
             n_steps=1024,
             batch_size=64,
             n_epochs=10,

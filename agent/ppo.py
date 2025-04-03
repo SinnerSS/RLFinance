@@ -230,7 +230,10 @@ class PPOAgent:
         obs_state_batch = np.expand_dims(obs_state_np, axis=0)
         last_action_batch = np.expand_dims(last_action_np, axis=0)
 
-        action_logits = self.actor.mu(obs_state_batch, last_action_batch)
+        obs_state_tensor = torch.from_numpy(obs_state_batch).float().to(self.device)
+        last_action_tensor = torch.from_numpy(last_action_batch).float().to(self.device)
+
+        action_logits = self.actor.mu(obs_state_tensor, last_action_tensor)
         action_std = torch.exp(self.log_std)
         distribution = Normal(action_logits, action_std)
         raw_action = distribution.sample()
