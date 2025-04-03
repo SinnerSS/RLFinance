@@ -121,6 +121,7 @@ def main():
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         price_data = load_price_model(pool, price_path)
         price_data['date'] = pd.to_datetime(price_data['date'])
+        price_data = price_data[(price_data['date'] >= cf.start_train) & (price_data['date'] <= cf.end_test)]
 
         feature_engineer = FeatureEngineer(
            use_technical_indicator=True,
