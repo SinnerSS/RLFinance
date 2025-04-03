@@ -55,7 +55,7 @@ class Critic(nn.Module):
             state_tensor = torch.from_numpy(observation['state']).float().to(self.device)
             # last_action_tensor = torch.from_numpy(observation['last_action']).float().to(self.device)
             # Flatten state and potentially concatenate last_action
-            flat_features = state_tensor.reshape( -1)
+            flat_features = state_tensor.reshape(-1)
             # input_tensor = torch.cat((flat_state, last_action_tensor), dim=-1) # If using last_action
             input_tensor = flat_features.unsqueeze(0) # If only using state tensor
         elif isinstance(observation, np.ndarray): # Added check for numpy array (Box)

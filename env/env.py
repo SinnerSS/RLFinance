@@ -157,3 +157,44 @@ class LoggedPortfolioOptimizationEnv(PortfolioOptimizationEnv):
         if self._new_gym_api:
             return self._state, self._reward, self._terminal, False, self._info
         return self._state, self._reward, self._terminal, self._info
+
+    def _temporal_variation_df(self, periods=1):
+            """Calculates the temporal variation dataframe. For each feature, this
+            dataframe contains the rate of the current feature's value and the last
+            feature's value given a period. It's used to normalize the dataframe.
+
+            Args:
+                periods: Periods (in time indexes) to calculate temporal variation.
+
+            Returns:
+                Temporal variation dataframe.
+            """
+            df_temporal_variation = self._df.copy()
+            prev_columns = []
+            epsilon = 1e-8  # Define a small constant to avoid division by zero
+
+            for column in self._features:
+                prev_column = f"prev_{column}"
+                prev_columns.append(prev_column)
+                df_temporal_variation[prev_column] = df_temporal_variation.groupby(
+                    self._tic_column
+                )[column].shift(periods=periods)
+
+                # --- Modified Division ---
+                # Add epsilon to the denominator to prevent division by zero
+                denominator = df_temporal_variation[prev_column] + epsilon
+                df_temporal_variation[column] = (
+                    df_temporal_variation[column] / denominator
+                )
+                # -------------------------
+
+            df_temporal_variation = (
+                df_temporal_variation.drop(columns=prev_columns)
+                .fillna(1) # Replace NaNs (e.g., from initial rows where shift produces NaN, or potentially 0/(0+eps) -> 0)
+                .reset_index(drop=True)
+            )
+            # Optional: Add clipping here just in case epsilon is too small for some extreme edge cases,
+            # although adding epsilon should generally prevent true inf/-inf.
+            # df_temporal_variation[self._features] = df_temporal_variation[self._features].clip(lower=-1e6, upper=1e6) # Example clipping bounds
+
+            return df_temporal_variation
