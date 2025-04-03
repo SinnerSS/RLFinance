@@ -98,6 +98,7 @@ class PPOAgent:
         lr_actor=3e-4,
         lr_critic=1e-3,
         entropy_coef=0.01,
+        vf_coef=0.5,
         max_grad_norm=0.5,
         optimizer=AdamW,
         use_pvm=False,
@@ -121,6 +122,7 @@ class PPOAgent:
         self.lr_actor = lr_actor
         self.lr_critic = lr_critic
         self.entropy_coef = entropy_coef
+        self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
         self.device = device
         self.use_pvm = use_pvm
@@ -380,7 +382,7 @@ class PPOAgent:
         advantages, returns = self._calculate_gae(batch_rewards, batch_dones, batch_values)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        full_dataset_tensors = dataset_tensors + (batch_actions, batch_log_probs_old, advantages, returns)
+        full_dataset_tensors = dataset_tensors + (batch_actions, batch_log_probs_old, batch_values, advantages, returns)
         dataset = TensorDataset(*full_dataset_tensors)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
@@ -389,10 +391,10 @@ class PPOAgent:
         for epoch in range(self.n_epochs):
             for minibatch_data in dataloader:
                 if len(dataset_tensors) == 2:
-                    obs_mini, last_actions_mini, actions_mini, log_probs_old_mini, advantages_mini, returns_mini = minibatch_data
+                    obs_mini, last_actions_mini, actions_mini, log_probs_old_mini, values_old_mini, advantages_mini, returns_mini = minibatch_data
                     obs_for_critic = {'state': obs_mini.cpu().numpy()}
                 else: 
-                    obs_mini, actions_mini, log_probs_old_mini, advantages_mini, returns_mini = minibatch_data
+                    obs_mini, actions_mini, log_probs_old_mini, values_old_mini, advantages_mini, returns_mini = minibatch_data
                     last_actions_mini = None
                     obs_for_critic = obs_mini.cpu().numpy()
 
@@ -412,9 +414,13 @@ class PPOAgent:
                 policy_loss = -torch.min(surr1, surr2).mean()
 
                 values_new = self.critic(obs_mini).squeeze()
-                value_loss = nn.functional.mse_loss(values_new, returns_mini)
+                values_clipped = values_old_mini + torch.clamp(values_new - values_old_mini, -self.clip_epsilon, self.clip_epsilon)
 
-                loss = policy_loss - self.entropy_coef * entropy.mean() + 0.5 * value_loss
+                vf_loss1 = nn.functional.mse_loss(values_new, returns_mini)
+                vf_loss2 = nn.functional.mse_loss(values_clipped, returns_mini)
+                value_loss = 0.5 * torch.mean(torch.maximum(vf_loss1, vf_loss2))
+
+                loss = policy_loss - self.entropy_coef * entropy.mean() + self.vf_coef * value_loss
 
                 self.optimizer_actor.zero_grad()
                 # Separate backward passes are generally cleaner for actor-critic
@@ -424,8 +430,16 @@ class PPOAgent:
                 self.optimizer_actor.step()
 
                 # --- Critic Update ---
+                values_new_for_critic_update = self.critic(obs_mini).squeeze()
+                values_clipped_for_critic_update = values_old_mini + torch.clamp(
+                     values_new_for_critic_update - values_old_mini, -self.clip_epsilon, self.clip_epsilon
+                )
+                vf_loss1_crit = nn.functional.mse_loss(values_new_for_critic_update, returns_mini, reduction='none')
+                vf_loss2_crit = nn.functional.mse_loss(values_clipped_for_critic_update, returns_mini, reduction='none')
+                value_loss_final = 0.5 * torch.mean(torch.maximum(vf_loss1_crit, vf_loss2_crit))
+
                 self.optimizer_critic.zero_grad()
-                value_loss.backward()
+                value_loss_final.backward() # Use the separately computed critic loss
                 torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
                 self.optimizer_critic.step()
 
