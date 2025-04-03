@@ -1,18 +1,20 @@
 import csv 
 import argparse
 import pandas as pd
+from pathlib import Path
 
 import torch
 from sklearn.preprocessing import MaxAbsScaler
-from finrl.meta.preprocessor.preprocessors import GroupByScaler
-from finrl.agents.portfolio_optimization.models import DRLAgent
+from finrl.config import INDICATORS
 from finrl.agents.portfolio_optimization.architectures import EIIE
-from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
+from finrl.meta.preprocessor.preprocessors import GroupByScaler, FeatureEngineer
 
 from config import Config
 from utils.plot import plot_values
 from loader.price_loader import load_price_strategy, load_price_model
 from strategy import BuyAndHold, Anticor, UniversalPortfolio, NearestNeighbor, Corn
+from agent.ppo import PPOAgent
+from env.env import LoggedPortfolioOptimizationEnv
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategies analysis.')
@@ -118,45 +120,70 @@ def main():
     if args.model:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         price_data = load_price_model(pool, price_path)
-        price_norm_data = GroupByScaler(by="tic", scaler=MaxAbsScaler).fit_transform(price_data)
+        price_data['date'] = pd.to_datetime(price_data['date'])
 
-        price_norm_data = price_norm_data[['date', 'tic', 'close', 'high', 'low']]
-        price_norm_data['date'] = pd.to_datetime(price_norm_data['date'])
+        feature_engineer = FeatureEngineer(
+           use_technical_indicator=True,
+           tech_indicator_list=INDICATORS,
+           use_turbulence=True
+        )
 
+        price_data = feature_engineer.preprocess_data(price_data)
+        print(price_data.isna().any(axis=None))
 
-        train_data = price_norm_data[(price_norm_data['date'] >= cf.start_train) & (price_norm_data['date'] <= cf.end_train)]
-        test_data = price_norm_data[(price_norm_data['date'] >= cf.start_test) & (price_norm_data['date'] <= cf.end_test)] 
+        train_data = price_data[(price_data['date'] >= cf.start_train) & (price_data['date'] <= cf.end_train)]
+        val_data = price_data[(price_data['date'] >= cf.start_val) & (price_data['date'] <= cf.end_val)]
+        test_data = price_data[(price_data['date'] >= cf.start_test) & (price_data['date'] <= cf.end_test)] 
         
-        train_env = PortfolioOptimizationEnv(
-            train_data,
-            initial_amount=10000,
-            time_window=50,
-            features=['close', 'high', 'low'],
-            normalize_df=None
-        )
-        test_env = PortfolioOptimizationEnv(
-            test_data,
-            initial_amount=10000,
-            time_window=50,
-            features=['close', 'high', 'low'],
-            normalize_df=None
-        )
-
-        model_kwargs = {
-            "lr": 0.01,
-            "policy": EIIE,
-        }
-
-        policy_kwargs = {
-            "k_size": 3,
+        env_kwargs = {
+            "initial_amount": 100000,
+            "features": ["close", "high", "low", "turbulence"] + INDICATORS,
+            "valuation_feature": "close",
             "time_window": 50,
+            "return_last_action": True,
+            "new_gym_api": True,
+            "order_df": False,
+            "cwd": "./portfolio_ppo_results"
         }
 
-        model = DRLAgent(train_env).get_model("pg", device, model_kwargs, policy_kwargs)
-        DRLAgent.train_model(model, episodes=100)
+        train_env = LoggedPortfolioOptimizationEnv(df=train_data.copy(), **env_kwargs)
+        val_env = LoggedPortfolioOptimizationEnv(df=val_data.copy(), **env_kwargs)
+        test_env = LoggedPortfolioOptimizationEnv(df=test_data.copy(), **env_kwargs)
 
-        
-        DRLAgent.DRL_validation(model, test_env)
+        policy_kwargs_eii_e = {
+            "initial_features": len(env_kwargs["features"]),
+            "time_window": env_kwargs["time_window"],
+        }
 
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        log_directory = "./result/portfolio_ppo"
+
+        agent = PPOAgent(
+            env=train_env,
+            validation_env=val_env,
+            policy_class=EIIE,
+            policy_kwargs=policy_kwargs_eii_e,
+            n_steps=1024,
+            batch_size=64,
+            n_epochs=10,
+            gamma=0.99,
+            lambda_gae=0.95,
+            clip_epsilon=0.2,
+            lr_actor=1e-4,
+            lr_critic=1e-3,
+            entropy_coef=0.0001,
+            max_grad_norm=0.5,
+            device=device,
+            log_dir=log_directory,
+            validation_freq=2048,
+            use_pvm=False
+        )
+
+        print(f"Starting training... Device: {agent.device}")
+        print(f"Check TensorBoard logs in: {agent.log_dir}")
+        print(f"To view logs: tensorboard --logdir {Path(log_directory).parent}")
+        agent.train(total_timesteps=200000) # Adjust total steps
+
+        agent.test(test_env)
 if __name__ == '__main__':
     main()

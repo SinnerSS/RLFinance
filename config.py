@@ -13,8 +13,11 @@ class Config:
 
     start_train: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2016-01-01'))
     end_train: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2020-12-31'))
-    start_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2021-01-01'))
-    end_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2022-12-31'))
+    start_val: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2021-01-01'))
+    end_val: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2021-12-31'))
+    start_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2022-01-01'))
+    end_test: pd.Timestamp = field(default_factory=lambda: pd.to_datetime('2023-12-28'))
+
 
     def __post_init__(self):
         assert self.data_path.is_dir(), 'Data directory do not exists!'
