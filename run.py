@@ -147,8 +147,7 @@ def main():
 
             price_data[feature] = price_data[feature].fillna(1.0)
 
-            # Clip potential outliers
-            price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
+            #price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
 
             price_data = price_data.drop(columns=[prev_feature_col])
 
@@ -168,7 +167,7 @@ def main():
 
             price_data[feature] = (price_data[feature] - mapped_means) / (mapped_stds + EPSILON)
 
-            price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
+            #price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
 
         price_data = price_data.fillna(0.0) # Fill with 0 after normalization seems reasonable
         print("Any NaNs after normalization and fill?", price_data[PRICE_FEATURES + INDICATORS_FEATURES].isna().any().any())
@@ -213,7 +212,7 @@ def main():
             lambda_gae=0.95,
             clip_epsilon=0.2,
             lr_actor=1e-4,
-            lr_critic=1e-3,
+            lr_critic=1e-4,
             entropy_coef=0.0001,
             max_grad_norm=0.5,
             device=device,
