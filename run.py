@@ -132,30 +132,17 @@ def main():
         price_data = feature_engineer.preprocess_data(price_data)
 
         PRICE_FEATURES = ["close", "high", "low"] 
-        INDICATORS_FEATURES = ["volume", "turbulence"] + INDICATORS # Features for Z-score normalization
+        INDICATORS_FEATURES = ["volume", "turbulence"] + INDICATORS
         EPSILON = 1e-8 
         CLIP_MIN = -10.0 
         CLIP_MAX = 10.0
-        train_data_for_stats = price_data[(price_data['date'] >= cf.start_train) & (price_data['date'] <= cf.end_train)]
-
-        print(f"Applying ratio normalization to: {PRICE_FEATURES}")
-        for feature in PRICE_FEATURES:
-            prev_feature_col = f"prev_{feature}"
-            price_data[prev_feature_col] = price_data.groupby('tic')[feature].shift(1)
-
-            price_data[feature] = price_data[feature] / (price_data[prev_feature_col] + EPSILON)
-
-            price_data[feature] = price_data[feature].fillna(1.0)
-
-            #price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
-
-            price_data = price_data.drop(columns=[prev_feature_col])
+        train_data = price_data[(price_data['date'] >= cf.start_train) & (price_data['date'] <= cf.end_train)]
 
         print(f"Applying tic-specific Z-score normalization to: {INDICATORS_FEATURES}")
 
         print("Calculating normalization stats from training data...")
-        tic_means = train_data_for_stats.groupby('tic')[INDICATORS_FEATURES].transform('mean')
-        tic_stds = train_data_for_stats.groupby('tic')[INDICATORS_FEATURES].transform('std')
+        tic_means = train_data.groupby('tic')[INDICATORS_FEATURES].transform('mean')
+        tic_stds = train_data.groupby('tic')[INDICATORS_FEATURES].transform('std')
 
         mean_map = tic_means.groupby(price_data['tic']).first()
         std_map = tic_stds.groupby(price_data['tic']).first()
@@ -169,7 +156,7 @@ def main():
 
             #price_data[feature] = price_data[feature].clip(CLIP_MIN, CLIP_MAX)
 
-        price_data = price_data.fillna(0.0) # Fill with 0 after normalization seems reasonable
+        price_data = price_data.fillna(0.0)
         print("Any NaNs after normalization and fill?", price_data[PRICE_FEATURES + INDICATORS_FEATURES].isna().any().any())
 
         train_data = price_data[(price_data['date'] >= cf.start_train) & (price_data['date'] <= cf.end_train)]
@@ -178,9 +165,9 @@ def main():
         
         env_kwargs = {
             "initial_amount": 100000,
-            "features": ["close", "high", "low", "turbulence"] + INDICATORS,
+            "features": PRICE_FEATURES + INDICATORS_FEATURES,
             "valuation_feature": "close",
-            "normalize_df": None,
+            "normalize_features": PRICE_FEATURES,
             "time_window": 50,
             "return_last_action": True,
             "new_gym_api": True,

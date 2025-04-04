@@ -3,9 +3,108 @@ import numpy as np
 import pandas as pd
 import quantstats as qs
 import matplotlib.pyplot as plt
+from gym import spaces
+from pathlib import Path
+
 from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
 
 class LoggedPortfolioOptimizationEnv(PortfolioOptimizationEnv):
+    EPSILON = 1e-8  # Define a small constant to avoid division by zero
+    def __init__(
+        self,
+        df,
+        initial_amount,
+        order_df=True,
+        return_last_action=False,
+        normalize_df="by_previous_time",
+        normalize_features=None,
+        reward_scaling=1,
+        comission_fee_model="trf",
+        comission_fee_pct=0,
+        features=["close", "high", "low"],
+        valuation_feature="close",
+        time_column="date",
+        time_format="%Y-%m-%d",
+        tic_column="tic",
+        tics_in_portfolio="all",
+        time_window=1,
+        cwd="./",
+        new_gym_api=False,
+    ):
+        self._time_window = time_window
+        self._time_index = time_window - 1
+        self._time_column = time_column
+        self._time_format = time_format
+        self._tic_column = tic_column
+        self._df = df
+        self._initial_amount = initial_amount
+        self._return_last_action = return_last_action
+        self._reward_scaling = reward_scaling
+        self._comission_fee_pct = comission_fee_pct
+        self._comission_fee_model = comission_fee_model
+        self._features = features
+        self._valuation_feature = valuation_feature
+        self._cwd = Path(cwd)
+        self._new_gym_api = new_gym_api
+
+        self._normalize_features = normalize_features if normalize_features else []
+
+        # results file
+        self._results_file = self._cwd / "results" / "rl"
+        self._results_file.mkdir(parents=True, exist_ok=True)
+
+        # initialize price variation
+        self._df_price_variation = None
+
+        # preprocess data
+        self._preprocess_data(order_df, normalize_df, tics_in_portfolio)
+
+        # dims and spaces
+        self._tic_list = self._df[self._tic_column].unique()
+        self.portfolio_size = (
+            len(self._tic_list)
+            if tics_in_portfolio == "all"
+            else len(tics_in_portfolio)
+        )
+        action_space = 1 + self.portfolio_size
+
+        # sort datetimes and define episode length
+        self._sorted_times = sorted(set(self._df[time_column]))
+        self.episode_length = len(self._sorted_times) - time_window + 1
+
+        # define action space
+        self.action_space = spaces.Box(low=0, high=1, shape=(action_space,))
+
+        # define observation state
+        if self._return_last_action:
+            # if  last action must be returned, a dict observation
+            # is defined
+            self.observation_space = spaces.Dict(
+                {
+                    "state": spaces.Box(
+                        low=-np.inf,
+                        high=np.inf,
+                        shape=(
+                            len(self._features),
+                            len(self._tic_list),
+                            self._time_window,
+                        ),
+                    ),
+                    "last_action": spaces.Box(low=0, high=1, shape=(action_space,)),
+                }
+            )
+        else:
+            self.observation_space = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(len(self._features), len(self._tic_list), self._time_window),
+            )
+
+        self._reset_memory()
+
+        self._portfolio_value = self._initial_amount
+        self._terminal = False
+
     def step(self, actions):
         self._terminal = self._time_index >= len(self._sorted_times) - 1
 
@@ -158,7 +257,45 @@ class LoggedPortfolioOptimizationEnv(PortfolioOptimizationEnv):
             return self._state, self._reward, self._terminal, False, self._info
         return self._state, self._reward, self._terminal, self._info
 
-    def _temporal_variation_df(self, periods=1):
+    def _preprocess_data(self, order, normalize, tics_in_portfolio):
+        """Orders and normalizes the environment's dataframe.
+
+        Args:
+            order: If true, the dataframe will be ordered by ticker list
+                and datetime.
+            normalize: Defines the normalization method applied to the dataframe.
+                Possible values are "by_previous_time", "by_fist_time_window_value",
+                "by_COLUMN_NAME" (where COLUMN_NAME must be changed to a real column
+                name) and a custom function. If None no normalization is done.
+            tics_in_portfolio: List of ticker symbols to be considered as part of the
+                portfolio. If "all", all tickers of input data are considered.
+        """
+        # order time dataframe by tic and time
+        if order:
+            self._df = self._df.sort_values(by=[self._tic_column, self._time_column])
+        # defining price variation after ordering dataframe
+        self._df_price_variation = self._temporal_variation_df(self._df, [self._valuation_feature])
+        # select only stocks in portfolio
+        if tics_in_portfolio != "all":
+            self._df_price_variation = self._df_price_variation[
+                self._df_price_variation[self._tic_column].isin(tics_in_portfolio)
+            ]
+        # apply normalization
+        if normalize:
+            self._normalize_dataframe(normalize)
+        print(self._df.columns)
+        # transform str to datetime
+        self._df[self._time_column] = pd.to_datetime(self._df[self._time_column])
+        self._df_price_variation[self._time_column] = pd.to_datetime(
+            self._df_price_variation[self._time_column]
+        )
+        # transform numeric variables to float32 (compatibility with pytorch)
+        self._df[self._features] = self._df[self._features].astype("float32")
+        self._df_price_variation[self._valuation_feature] = self._df_price_variation[
+            self._valuation_feature
+        ].astype("float32")
+
+    def _temporal_variation_df(self, df, features, periods=1):
             """Calculates the temporal variation dataframe. For each feature, this
             dataframe contains the rate of the current feature's value and the last
             feature's value given a period. It's used to normalize the dataframe.
@@ -169,32 +306,65 @@ class LoggedPortfolioOptimizationEnv(PortfolioOptimizationEnv):
             Returns:
                 Temporal variation dataframe.
             """
-            df_temporal_variation = self._df.copy()
-            prev_columns = []
-            epsilon = 1e-8  # Define a small constant to avoid division by zero
+            df_temporal_variation = df[[self._time_column, self._tic_column] + features].copy()
 
-            for column in self._features:
+            df_temporal_variation = df_temporal_variation.sort_values(by=[self._tic_column, self._time_column])
+
+            for column in features:
                 prev_column = f"prev_{column}"
-                prev_columns.append(prev_column)
                 df_temporal_variation[prev_column] = df_temporal_variation.groupby(
                     self._tic_column
                 )[column].shift(periods=periods)
 
-                # --- Modified Division ---
-                # Add epsilon to the denominator to prevent division by zero
-                denominator = df_temporal_variation[prev_column] + epsilon
-                df_temporal_variation[column] = (
-                    df_temporal_variation[column] / denominator
+                denominator = df_temporal_variation[prev_column] + self.EPSILON
+
+                df_temporal_variation[column] = np.divide(
+                    df_temporal_variation[column],
+                    denominator,
+                    out=np.full_like(df_temporal_variation[column], 1.0),
+                    where=denominator.notna() & (np.abs(denominator) > self.EPSILON / 10)
                 )
-                # -------------------------
 
-            df_temporal_variation = (
-                df_temporal_variation.drop(columns=prev_columns)
-                .fillna(1) # Replace NaNs (e.g., from initial rows where shift produces NaN, or potentially 0/(0+eps) -> 0)
-                .reset_index(drop=True)
-            )
-            # Optional: Add clipping here just in case epsilon is too small for some extreme edge cases,
-            # although adding epsilon should generally prevent true inf/-inf.
-            # df_temporal_variation[self._features] = df_temporal_variation[self._features].clip(lower=-1e6, upper=1e6) # Example clipping bounds
+                mask_initial_nan = df_temporal_variation[prev_column].isna()
+                df_temporal_variation.loc[mask_initial_nan, column] = 1.0
 
-            return df_temporal_variation
+                df_temporal_variation = df_temporal_variation.drop(columns=[prev_column])
+
+            return df_temporal_variation[[self._time_column, self._tic_column] + features]
+
+    def _normalize_dataframe(self, normalize):
+        """ "Normalizes the environment's dataframe.
+
+        Args:
+            normalize: Defines the normalization method applied to the dataframe.
+                Possible values are "by_previous_time", "by_fist_time_window_value",
+                "by_COLUMN_NAME" (where COLUMN_NAME must be changed to a real column
+                name) and a custom function. If None no normalization is done.
+
+        Note:
+            If a custom function is used in the normalization, it must have an
+            argument representing the environment's dataframe.
+        """
+        if type(normalize) == str:
+            if normalize == "by_fist_time_window_value":
+                print(
+                    "Normalizing {} by first time window value...".format(
+                        self._normalize_features
+                    )
+                )
+                normalized_features = self._temporal_variation_df(self._df, self._normalize_features, self._time_window - 1)
+                self._df.update(normalized_features[self._normalize_features])
+            elif normalize == "by_previous_time":
+                print(f"Normalizing {self._normalize_features} by previous time...")
+                normalized_features = self._temporal_variation_df(self._df, self._normalize_features)
+                self._df.update(normalized_features[self._normalize_features])
+            elif normalize.startswith("by_"):
+                normalizer_column = normalize[3:]
+                print(f"Normalizing {self._features} by {normalizer_column}")
+                for column in self._features:
+                    self._df[column] = self._df[column] / self._df[normalizer_column]
+        elif callable(normalize):
+            print("Applying custom normalization function...")
+            self._df = normalize(self._df)
+        else:
+            print("No normalization was performed.")
