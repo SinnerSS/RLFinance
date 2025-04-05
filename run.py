@@ -190,7 +190,6 @@ def main():
         agent = PPOAgent(
             env=train_env,
             validation_env=val_env,
-            policy_class=EIIE,
             policy_kwargs=policy_kwargs,
             n_steps=1024,
             batch_size=64,

@@ -14,7 +14,7 @@ from pathlib import Path
 from finrl.agents.portfolio_optimization.architectures import EIIE
 from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
 
-from .critic import MLPCritic
+from .critic import MLPCritic, CNNCritic
 
 try:
     from torch.utils.tensorboard.writer import SummaryWriter
@@ -27,7 +27,7 @@ class PPOAgent:
         env: PortfolioOptimizationEnv,
         policy_class=EIIE, 
         policy_kwargs=None,
-        critic_class=MLPCritic,
+        critic_class=CNNCritic,
         critic_kwargs=None,
         n_steps=2048,
         batch_size=64,

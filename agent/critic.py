@@ -59,3 +59,83 @@ class MLPCritic(nn.Module):
     def forward(self, observation):
         processed_obs = self._preprocess_state(observation)
         return self.critic(processed_obs)
+
+class CNNCritic(nn.Module):
+    """CNN Critic Network mirroring EIIE structure"""
+    def __init__(
+        self, state_shape,
+        k_size=3,
+        conv_mid_features=32,
+        conv_final_features=64,
+        hidden_dim=128,
+        device="cpu"
+        ):
+        super().__init__()
+        self.device = device
+        self.features, self.num_assets, self.time_window = state_shape
+        self.k_size = k_size
+        self.n_size = self.time_window - k_size + 1
+
+        # --- CNN Feature Extractor (Mirroring improved EIIE) ---
+        # Layer 1: Temporal Conv per asset/feature
+        self.cnn_layer1 = nn.Conv2d(
+            in_channels=self.features,
+            out_channels=conv_mid_features,
+            kernel_size=(1, k_size),
+        )
+        
+        self.cnn_layer2 = nn.Conv2d(
+            in_channels=conv_mid_features,
+            out_channels=conv_final_features,
+            kernel_size=(1, 3),
+            # You might need padding=(0, 1) to maintain dimension or adjust calculations
+        )
+
+        dummy_input = torch.randn(1, self.features, self.num_assets, self.time_window).to(device)
+        with torch.no_grad():
+            x = torch.relu(self.cnn_layer1(dummy_input))
+            x = torch.relu(self.cnn_layer2(x))
+            cnn_output_dim = x.flatten(start_dim=1).shape[-1] # Flatten all dims except batch
+
+        self.mlp_head = nn.Sequential(
+            nn.Linear(cnn_output_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        ).to(device)
+
+    def _preprocess_state(self, observation):
+        """Ensures state is a tensor with shape (Batch, Features, Assets, Window)"""
+        if isinstance(observation, dict):
+             # Assuming obs['state'] is the relevant part from Dict observation
+             state_tensor = torch.from_numpy(observation['state']).float().to(self.device)
+             # Add batch dim if it's a single observation (e.g., during rollout step)
+             if state_tensor.ndim == 3: state_tensor = state_tensor.unsqueeze(0)
+        elif isinstance(observation, np.ndarray): # Box observation
+             state_tensor = torch.from_numpy(observation).float().to(self.device)
+             if state_tensor.ndim == 3: state_tensor = state_tensor.unsqueeze(0)
+        elif isinstance(observation, torch.Tensor): # Already a tensor (e.g., from DataLoader)
+             state_tensor = observation.to(self.device)
+             # Ensure 4D: (Batch, F, N, T)
+             if state_tensor.ndim == 3: # Should only happen if batch_size=1 and drop_last=False?
+                  state_tensor = state_tensor.unsqueeze(0)
+             elif state_tensor.ndim != 4:
+                  raise ValueError(f"Unexpected tensor shape: {state_tensor.shape}")
+        else:
+             raise TypeError(f"Unsupported observation type for critic preprocessing: {type(observation)}")
+
+        expected_shape = (-1, self.features, self.num_assets, self.time_window)
+        if state_tensor.shape[1] != expected_shape[1] or \
+           state_tensor.shape[2] != expected_shape[2] or \
+           state_tensor.shape[3] != expected_shape[3]:
+             raise ValueError(f"State tensor shape mismatch. Expected ~{expected_shape}, Got: {state_tensor.shape}")
+
+        return state_tensor
+
+    def forward(self, observation):
+        processed_obs = self._preprocess_state(observation)
+        x = torch.relu(self.cnn_layer1(processed_obs))
+        x = torch.relu(self.cnn_layer2(x))
+        flat_features = x.flatten(start_dim=1)
+        return self.mlp_head(flat_features)
