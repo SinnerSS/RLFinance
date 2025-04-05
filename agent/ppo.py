@@ -14,73 +14,12 @@ from pathlib import Path
 from finrl.agents.portfolio_optimization.architectures import EIIE
 from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
 
+from .critic import MLPCritic
+
 try:
     from torch.utils.tensorboard.writer import SummaryWriter
 except ImportError:
     SummaryWriter = None
-
-class Critic(nn.Module):
-    """Simple MLP Critic Network"""
-    def __init__(self, state_shape, hidden_dim=128, device="cpu"):
-        super().__init__()
-        # Calculate flat input size from state_shape (features, num_assets, time_window)
-        # Assuming state comes directly from env (potentially excluding last_action dict key)
-        # Adjust this logic if the state preprocessing is different
-        if isinstance(state_shape, gym.spaces.Dict):
-             # If observation space is Dict, adjust based on the actual 'state' key shape
-             input_dim = np.prod(state_shape['state'].shape)
-             # Potentially add dimension for last_action if needed
-             # Example: input_dim += state_shape['last_action'].shape[0]
-        elif isinstance(state_shape, tuple):
-             # Example: (features, num_assets, time_window) -> features * num_assets * time_window
-            input_dim = np.prod(state_shape)
-        elif isinstance(state_shape, gym.spaces.Box): # Added check for Box
-             input_dim = np.prod(state_shape.shape)
-        else:
-             raise ValueError(f"Unsupported state_shape type: {type(state_shape)}")
-
-        self.device = device
-        self.critic = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1) # Output a single value estimate
-        ).to(device)
-
-    def _preprocess_state(self, observation):
-        """Flattens and prepares the observation for the MLP"""
-        if isinstance(observation, dict):
-            # Handle Dict observation space if necessary
-            state_tensor = torch.from_numpy(observation['state']).float().to(self.device)
-            # last_action_tensor = torch.from_numpy(observation['last_action']).float().to(self.device)
-            # Flatten state and potentially concatenate last_action
-            flat_features = state_tensor.reshape(-1)
-            # input_tensor = torch.cat((flat_state, last_action_tensor), dim=-1) # If using last_action
-            input_tensor = flat_features.unsqueeze(0) # If only using state tensor
-        elif isinstance(observation, np.ndarray): # Added check for numpy array (Box)
-            state_tensor = torch.from_numpy(observation).float().to(self.device)
-            flat_features = state_tensor.reshape(-1) # Flatten
-            input_tensor = flat_features.unsqueeze(0) # Add batch dimension
-        elif isinstance(observation, torch.Tensor):
-            # Case 3: Input during update phase (from DataLoader) <<< FIX ADDED HERE
-            # Input is already a tensor, likely with batch dimension
-            state_tensor = observation.to(self.device)
-            # Assume shape is (Batch, F, N, T) or similar - we need (Batch, Flattened_Features)
-            # The first dimension is the batch size. Flatten all subsequent dimensions.
-            if state_tensor.ndim > 1: # Check if it has more than one dimension (includes batch)
-                input_tensor = state_tensor.reshape(state_tensor.size(0), -1) # Shape: (Batch, F*N*T)
-            else: # Handle unlikely case of a 1D tensor during update
-                input_tensor = state_tensor.reshape(1, -1) # Shape: (1, F*N*T)
-        else:
-            # Now this catches genuinely unexpected types
-            raise TypeError(f"Unsupported observation type for critic preprocessing: {type(observation)}") # Use TypeError
-
-        return input_tensor
-
-    def forward(self, observation):
-        processed_obs = self._preprocess_state(observation)
-        return self.critic(processed_obs)
 
 class PPOAgent:
     def __init__(
@@ -88,7 +27,8 @@ class PPOAgent:
         env: PortfolioOptimizationEnv,
         policy_class=EIIE, 
         policy_kwargs=None,
-        critic_hidden_dim=128,
+        critic_class=MLPCritic,
+        critic_kwargs=None,
         n_steps=2048,
         batch_size=64,
         n_epochs=10,
@@ -128,16 +68,17 @@ class PPOAgent:
         self.use_pvm = use_pvm
 
         self.policy_kwargs = {} if policy_kwargs is None else policy_kwargs
+        self.critic_kwargs = {} if critic_kwargs is None else critic_kwargs
 
         self.actor = policy_class(**self.policy_kwargs).to(self.device)
         action_dim = self.env.action_space.shape[0]
         self.log_std = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32, device=device))
 
         if isinstance(env.observation_space, gym.spaces.Dict):
-             state_shape_for_critic = env.observation_space.spaces['state'].shape
+             state_shape = env.observation_space.spaces['state'].shape
         else: 
-             state_shape_for_critic = env.observation_space.shape
-        self.critic = Critic(state_shape_for_critic, critic_hidden_dim, device=device)
+             state_shape = env.observation_space.shape
+        self.critic =  critic_class(state_shape, **self.critic_kwargs)
 
         self.optimizer_actor = optimizer(
             list(self.actor.parameters()) + [self.log_std], lr=lr_actor
