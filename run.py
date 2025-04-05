@@ -185,12 +185,17 @@ def main():
             "device": device
         }
 
+        critic_kwargs = {
+            "device": device
+        }
+
         log_directory = "./result/portfolio_ppo"
 
         agent = PPOAgent(
             env=train_env,
             validation_env=val_env,
             policy_kwargs=policy_kwargs,
+            critic_kwargs=critic_kwargs,
             n_steps=1024,
             batch_size=64,
             n_epochs=10,

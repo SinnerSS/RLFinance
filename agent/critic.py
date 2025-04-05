@@ -76,8 +76,6 @@ class CNNCritic(nn.Module):
         self.k_size = k_size
         self.n_size = self.time_window - k_size + 1
 
-        # --- CNN Feature Extractor (Mirroring improved EIIE) ---
-        # Layer 1: Temporal Conv per asset/feature
         self.cnn_layer1 = nn.Conv2d(
             in_channels=self.features,
             out_channels=conv_mid_features,
@@ -88,10 +86,9 @@ class CNNCritic(nn.Module):
             in_channels=conv_mid_features,
             out_channels=conv_final_features,
             kernel_size=(1, 3),
-            # You might need padding=(0, 1) to maintain dimension or adjust calculations
         )
 
-        dummy_input = torch.randn(1, self.features, self.num_assets, self.time_window).to(device)
+        dummy_input = torch.randn(1, self.features, self.num_assets, self.time_window)
         with torch.no_grad():
             x = torch.relu(self.cnn_layer1(dummy_input))
             x = torch.relu(self.cnn_layer2(x))
@@ -103,7 +100,9 @@ class CNNCritic(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, 1)
-        ).to(device)
+        )
+
+        self.to(self.device)
 
     def _preprocess_state(self, observation):
         """Ensures state is a tensor with shape (Batch, Features, Assets, Window)"""
