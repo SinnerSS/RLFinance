@@ -14,6 +14,7 @@ from pathlib import Path
 from finrl.agents.portfolio_optimization.architectures import EIIE
 from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
 
+from .actor import CustomEIIE
 from .critic import MLPCritic, CNNCritic
 
 try:
@@ -25,7 +26,7 @@ class PPOAgent:
     def __init__(
         self,
         env: PortfolioOptimizationEnv,
-        policy_class=EIIE, 
+        policy_class=CustomEIIE, 
         policy_kwargs=None,
         critic_class=CNNCritic,
         critic_kwargs=None,
@@ -70,7 +71,7 @@ class PPOAgent:
         self.policy_kwargs = {} if policy_kwargs is None else policy_kwargs
         self.critic_kwargs = {} if critic_kwargs is None else critic_kwargs
 
-        self.actor = policy_class(**self.policy_kwargs).to(self.device)
+        self.actor = policy_class(num_assets=self.env.portfolio_size, **self.policy_kwargs).to(self.device)
         action_dim = self.env.action_space.shape[0]
         self.log_std = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32, device=device))
 

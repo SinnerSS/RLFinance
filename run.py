@@ -14,7 +14,7 @@ from utils.plot import plot_values
 from loader.price_loader import load_price_strategy, load_price_model
 from strategy import BuyAndHold, Anticor, UniversalPortfolio, NearestNeighbor, Corn
 from agent.ppo import PPOAgent
-from env.env import LoggedPortfolioOptimizationEnv
+from env.env import CustomPortfolioOptimizationEnv
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategies analysis.')
@@ -175,9 +175,9 @@ def main():
             "cwd": "./result"
         }
 
-        train_env = LoggedPortfolioOptimizationEnv(df=train_data.copy(), **env_kwargs)
-        val_env = LoggedPortfolioOptimizationEnv(df=val_data.copy(), **env_kwargs)
-        test_env = LoggedPortfolioOptimizationEnv(df=test_data.copy(), **env_kwargs)
+        train_env = CustomPortfolioOptimizationEnv(df=train_data.copy(), **env_kwargs)
+        val_env = CustomPortfolioOptimizationEnv(df=val_data.copy(), **env_kwargs)
+        test_env = CustomPortfolioOptimizationEnv(df=test_data.copy(), **env_kwargs)
 
         policy_kwargs = {
             "initial_features": len(env_kwargs["features"]),

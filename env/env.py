@@ -8,7 +8,7 @@ from pathlib import Path
 
 from finrl.meta.env_portfolio_optimization.env_portfolio_optimization import PortfolioOptimizationEnv
 
-class LoggedPortfolioOptimizationEnv(PortfolioOptimizationEnv):
+class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
     EPSILON = 1e-8  # Define a small constant to avoid division by zero
     def __init__(
         self,
