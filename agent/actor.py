@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torch.nn as nn
 
 class CustomEIIE(nn.Module):
@@ -47,24 +48,32 @@ class CustomEIIE(nn.Module):
             kernel_size=(1, 1)
         )
 
-    def mu(self, state_tensor, last_action_tensor):
-        batch_size = state_tensor.shape[0]
-        expected_state_shape = (batch_size, self.initial_features, self.num_assets, self.time_window)
-        expected_action_shape = (batch_size, self.num_assets + 1)
-        if state_tensor.shape != expected_state_shape:
-             if state_tensor.shape == (batch_size, self.num_assets, self.initial_features, self.time_window):
-                 print(f"Warning: state_tensor shape {state_tensor.shape} suggests Assets and Features might be swapped. Permuting to expected {expected_state_shape}.")
-                 state_tensor = state_tensor.permute(0, 2, 1, 3)
-             else:
-                raise ValueError(f"Unexpected state_tensor shape. Got {state_tensor.shape}, expected {expected_state_shape}")
-        if last_action_tensor.shape != expected_action_shape:
-            raise ValueError(f"Unexpected last_action_tensor shape. Got {last_action_tensor.shape}, expected {expected_action_shape}")
+    def mu(self, observation, last_action):
+        if isinstance(observation, np.ndarray):
+            observation = torch.from_numpy(observation)
+        observation = observation.to(self.device).float()
 
-        x = self.relu1(self.conv1(state_tensor))
+        if isinstance(last_action, np.ndarray):
+            last_action = torch.from_numpy(last_action)
+        last_action = last_action.to(self.device).float()
+
+        batch_size = observation.shape[0]
+        expected_observation_shape = (batch_size, self.initial_features, self.num_assets, self.time_window)
+        expected_action_shape = (batch_size, self.num_assets + 1)
+        if observation.shape != expected_observation_shape:
+             if observation.shape == (batch_size, self.num_assets, self.initial_features, self.time_window):
+                 print(f"Warning: observation shape {observation.shape} suggests Assets and Features might be swapped. Permuting to expected {expected_observation_shape}.")
+                 observation = observation.permute(0, 2, 1, 3)
+             else:
+                raise ValueError(f"Unexpected observation shape. Got {observation.shape}, expected {expected_observation_shape}")
+        if last_action.shape != expected_action_shape:
+            raise ValueError(f"Unexpected last_action shape. Got {last_action.shape}, expected {expected_action_shape}")
+
+        x = self.relu1(self.conv1(observation))
         x = self.relu2(self.conv2(x))
         # x shape: (Batch, conv_final_features, num_assets, self.output_time_dim)
 
-        last_action_asset_weights = last_action_tensor[:, 1:] # Shape: (Batch, Assets)
+        last_action_asset_weights = last_action[:, 1:] # Shape: (Batch, Assets)
         last_action_reshaped = last_action_asset_weights.view(
             batch_size, 1, self.num_assets, 1
         ).expand(
