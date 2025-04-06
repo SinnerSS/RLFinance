@@ -51,7 +51,7 @@ def main():
             price_data,
             start_date=cf.start_test,
             end_date=cf.end_test,
-            num_candidates=100,
+            num_candidates=50,
             beta=2,
             seed=42,
         )
@@ -177,7 +177,7 @@ def main():
 
         train_env = CustomPortfolioOptimizationEnv(df=train_data.copy(), **env_kwargs)
         val_env = CustomPortfolioOptimizationEnv(df=val_data.copy(), **env_kwargs)
-        test_env = CustomPortfolioOptimizationEnv(df=test_data.copy(), **env_kwargs)
+        test_env = CustomPortfolioOptimizationEnv(df=test_data.copy(), log_metrics=True, **env_kwargs)
 
         policy_kwargs = {
             "initial_features": len(env_kwargs["features"]),

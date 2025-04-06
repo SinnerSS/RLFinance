@@ -30,6 +30,7 @@ class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
         time_window=1,
         cwd="./",
         new_gym_api=False,
+        log_metrics=False,
     ):
         self._time_window = time_window
         self._time_index = time_window - 1
@@ -46,6 +47,7 @@ class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
         self._valuation_feature = valuation_feature
         self._cwd = Path(cwd)
         self._new_gym_api = new_gym_api
+        self._log_metrics = log_metrics
 
         self._normalize_features = normalize_features if normalize_features else []
 
@@ -164,9 +166,31 @@ class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
             final_portfolio_value = self._portfolio_value
             sharpe = qs.stats.sharpe(metrics_df["returns"])
             max_dd = qs.stats.max_drawdown(metrics_df["portfolio_values"])
+            initial_portfolio_value = self._asset_memory["final"][0]
+            acc_value = final_portfolio_value / initial_portfolio_value
+            self._info["initial_portfolio_value"] = initial_portfolio_value
             self._info["final_portfolio_value"] = final_portfolio_value
+            self._info["accumulative_return"] = acc_value - 1
             self._info["sharpe_ratio"] = sharpe
             self._info["max_drawdown"] = max_dd
+
+            if self._log_metrics:
+                history_df = metrics_df[["date", "portfolio_values"]].copy()
+                history_df.to_csv(self._results_file / "history.csv")
+                final_metrics = {
+                    "Metric": ["Initial Portfolio Value",
+                               "Final Portfolio Value",
+                               "Accumulative Portfolio Value (Factor)",
+                               "Max Drawdown",
+                               "Sharpe Ratio (Annualized)"],
+                    "Value": [initial_portfolio_value,
+                              final_portfolio_value,
+                              acc_value,
+                              max_dd,
+                              sharpe]
+                }
+                final_metrics_df = pd.DataFrame(final_metrics)
+                final_metrics_df.to_csv(self._results_file / "metrics.csv", index=False)
             if self._new_gym_api:
                 return self._state, self._reward, self._terminal, False, self._info
             return self._state, self._reward, self._terminal, self._info
