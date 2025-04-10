@@ -135,7 +135,7 @@ class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
             plt.savefig(self._results_file / "reward.png")
             plt.close()
 
-            plt.plot(self._actions_memory)
+            plt.plot(self._actions_memory[1:])
             plt.title("Actions performed")
             plt.xlabel("Time")
             plt.ylabel("Weight")
