@@ -445,6 +445,7 @@ class PPOAgent:
         pbar.close()
         if self.writer:
             self.writer.close()
+        print(f"Total episodes done: {self.total_episodes_done}")
         print("Training finished.")
 
     def run_validation(self, deterministic=True):

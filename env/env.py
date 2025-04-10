@@ -175,7 +175,7 @@ class CustomPortfolioOptimizationEnv(PortfolioOptimizationEnv):
             self._info["max_drawdown"] = max_dd
 
             if self._log_metrics:
-                history_df = metrics_df[["date", "portfolio_values"]].copy()
+                history_df = metrics_df[["portfolio_values"]].copy()
                 history_df.to_csv(self._results_file / "history.csv")
                 final_metrics = {
                     "Metric": ["Initial Portfolio Value",
