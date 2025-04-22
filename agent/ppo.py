@@ -39,7 +39,7 @@ class PPOAgent:
         lr_actor=3e-4,
         lr_critic=1e-3,
         entropy_coef=0.01,
-        vf_coef=0.5,
+        vf_coef=0.7,
         max_grad_norm=0.5,
         optimizer=AdamW,
         use_pvm=False,
