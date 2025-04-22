@@ -179,7 +179,7 @@ class StockTradingEnv(gym.Env):
         asset_value = np.sum(self._asset_holdings * next_prices)
         self._portfolio_value = self._capital + asset_value 
         
-        reward = (self._portfolio_value - current_portfolio_value) * self.reward_scaling
+        reward = (np.log(self._portfolio_value / (current_portfolio_value + self.EPSILON))) * self.reward_scaling
 
         if self._current_step >= self._end_tick:
             self._terminated = True
@@ -204,11 +204,6 @@ class StockTradingEnv(gym.Env):
         self._info_history.append(info)
         
         return observation, reward, self._terminated, self._truncated, info
-
-    # def close(self):
-    #     if self.log_metrics and self._info_history:
-    #          self._generate_report()
-    #     logger.debug("Environment closed.")
 
     def _generate_report(self):
         if not self._info_history:
