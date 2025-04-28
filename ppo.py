@@ -5,6 +5,7 @@ import quantstats as qs
 import os
 import logging
 from pathlib import Path
+from typing import List
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -21,8 +22,23 @@ MODEL_SAVE_DIR = os.path.join(LOG_DIR, "models")
 REPORT_SAVE_DIR = os.path.join(LOG_DIR, "eval/reports") # For env's internal reporting
 TEST_SAVE_DIR = os.path.join(LOG_DIR, "test/")
 
-SELECTED_TICKERS = 'all' # Or your list: ['TIC1', 'TIC2', ...]
-FEATURES = ['open_log_ret', 'high_log_ret', 'low_log_ret', 'close_log_ret', 'close', 'volume_log'] + ['macd_norm', 'cci_30_norm', 'bb_pctB', 'sma_short_ratio', 'sma_long_ratio', 'rsi_30_norm', 'dx_30_norm']
+SELECTED_TICKERS = 'all'
+TECHNICAL_FEATURES = [
+    'open_log_ret', 'high_log_ret', 'low_log_ret', 'close_log_ret',
+    'close', 'volume_log',
+    'macd_norm', 'cci_30_norm', 'bb_pctB',
+    'sma_short_ratio', 'sma_long_ratio',
+    'rsi_30_norm', 'dx_30_norm'
+]
+
+NEWS_FEATURES = [
+    'mean_sentiment_norm',
+    'news_count_norm',
+    'mean_recent_3_news_90d_norm',
+    'mean_recent_5_news_180d_norm'
+]
+
+FEATURES = TECHNICAL_FEATURES + NEWS_FEATURES
 EVALUATE_BY = 'close' 
 LOOKBACK = 30
 INITIAL_CAPITAL = 100000.0
@@ -39,7 +55,7 @@ PPO_PARAMS = {
     "gamma": 0.99,        # Discount factor
     "gae_lambda": 0.95,   # Factor for Generalized Advantage Estimation
     "clip_range": 0.2,    # Clipping parameter PPO
-    "ent_coef": 0.00,      # Entropy coefficient (0 might be okay for finance if exploration isn't lacking)
+    "ent_coef": 0.001,      # Entropy coefficient (0 might be okay for finance if exploration isn't lacking)
     "vf_coef": 1.0,       # Value function coefficient
     "max_grad_norm": 0.5, # Max gradient norm for clipping
     "tensorboard_log": TENSORBOARD_LOG_DIR,
@@ -121,6 +137,7 @@ if __name__ == "__main__":
             sma_long: str = 'close_60_sma',
             rsi_col: str = 'rsi_30',
             dx_col: str = 'dx_30',
+            news_col: List[str] = ['mean_sentiment', 'news_count', 'mean_recent_3_news_90d', 'mean_recent_5_news_180d'],
             window: int = 30
             ):
             epsilon = 1e-8
