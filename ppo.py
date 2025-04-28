@@ -167,8 +167,13 @@ if __name__ == "__main__":
 
             df[f'{rsi_col}_norm'] = df[rsi_col] / 100
             df[f'{dx_col}_norm'] = df[dx_col] / 100
-            print(df.isnull().values.any())
+            for col in news_cols:
+                m_mean = df[col].rolling(window).mean().shift(1)
+                m_std = df[col].rolling(window).std(ddof=0).shift(1)
+                df[f'{col}_norm'] = (df[col] - m_mean) / (m_std + epsilon)
+                df[f'{col}_norm'] = df[f'{col}_norm'].ffill().bfill()
 
+            assert not df.isnull().values.any(), "Null values found after normalization"
             return df
 
         train_data = normalize_features(train_data)
