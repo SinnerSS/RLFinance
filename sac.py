@@ -95,13 +95,12 @@ def make_env(data, tickers, features, evaluate_by, lookback, initial_capital, ma
             log_dir=log_dir
         )
         if not train:
-             monitor_path = os.path.join(TEST_SAVE_DIR, f"monitor_sac_test_{seed}.csv") # Changed prefix
+             monitor_path = os.path.join(TEST_SAVE_DIR, f"monitor_sac_{seed}.csv") # Changed prefix
              os.makedirs(os.path.dirname(monitor_path), exist_ok=True)
              env = Monitor(env,
                           filename=monitor_path,
                           allow_early_resets=True,
                           info_keywords=("date", "portfolio_value"))
-        env.seed(seed)
         return env
     return _init
 # --- End Shared Functions ---
