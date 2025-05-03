@@ -26,14 +26,14 @@ TECHNICAL_FEATURES = [
     'rsi_30_norm', 'dx_30_norm'
 ]
 
-NEWS_FEATURES = [
-    'mean_sentiment_norm',
-    'news_count_norm',
-    'mean_recent_3_news_90d_norm',
-    'mean_recent_5_news_180d_norm'
-]
+# NEWS_FEATURES = [
+#     'mean_sentiment_norm',
+#     'news_count_norm',
+#     'mean_recent_3_news_90d_norm',
+#     'mean_recent_5_news_180d_norm'
+# ]
 
-FEATURES = TECHNICAL_FEATURES + NEWS_FEATURES
+FEATURES = TECHNICAL_FEATURES #+ NEWS_FEATURES
 EVALUATE_BY = 'close'
 LOOKBACK = 30
 INITIAL_CAPITAL = 100000.0
@@ -79,68 +79,6 @@ def load_data(file_path) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Error loading data from {file_path}: {e}")
         raise
-
-def normalize_features(
-    df: pd.DataFrame,
-    price_cols: list = ['open', 'high', 'low', 'close'],
-    vol_col: str = 'volume',
-    macd_col: str = 'macd',
-    cci_col: str = 'cci_30',
-    bb_ub: str = 'boll_ub',
-    bb_lb: str = 'boll_lb',
-    sma_short: str = 'close_30_sma',
-    sma_long: str = 'close_60_sma',
-    rsi_col: str = 'rsi_30',
-    dx_col: str = 'dx_30',
-    news_col: List[str] = ['mean_sentiment', 'news_count', 'mean_recent_3_news_90d', 'mean_recent_5_news_180d'],
-    window: int = 30
-    ):
-    epsilon = 1e-8
-    # Group by tic for rolling calculations to prevent lookahead bias across tickers
-    grouped = df.groupby('tic')
-
-    for col in price_cols:
-        df[f'{col}_log_ret'] = grouped[col].transform(lambda x: np.log(x / (x.shift(1) + epsilon)))
-        df[f'{col}_log_ret'] = df[f'{col}_log_ret'].ffill().bfill() # Careful with ffill/bfill, might need per-group handling
-
-    df['volume_log'] = np.log1p(df[vol_col])
-    vol_mean = grouped['volume_log'].transform(lambda x: x.rolling(window).mean().shift(1))
-    vol_std = grouped['volume_log'].transform(lambda x: x.rolling(window).std(ddof=0).shift(1))
-    df['volume_norm'] = (df['volume_log'] - vol_mean) / (vol_std + epsilon)
-
-    for col in [macd_col, cci_col]:
-        m_mean = grouped[col].transform(lambda x: x.rolling(window).mean().shift(1))
-        m_std = grouped[col].transform(lambda x: x.rolling(window).std(ddof=0).shift(1))
-        df[f'{col}_norm'] = (df[col] - m_mean) / (m_std + epsilon)
-
-    df['bb_pctB'] = (df['close'] - df[bb_lb]) / (df[bb_ub] - df[bb_lb] + epsilon)
-
-    df['sma_short_ratio'] = df['close'] / (df[sma_short] + epsilon) - 1
-    df['sma_long_ratio'] = df['close'] / (df[sma_long] + epsilon) - 1
-
-    df[f'{rsi_col}_norm'] = df[rsi_col] / 100
-    df[f'{dx_col}_norm'] = df[dx_col] / 100
-
-    for col in news_col:
-        n_mean = grouped[col].transform(lambda x: x.rolling(window).mean().shift(1))
-        n_std = grouped[col].transform(lambda x: x.rolling(window).std(ddof=0).shift(1))
-        df[f'{col}_norm'] = (df[col] - n_mean) / (n_std + epsilon)
-
-    # Fill NaNs that might remain at the start of each ticker's history
-    feature_cols_to_fill = TECHNICAL_FEATURES + NEWS_FEATURES
-    for tic in df['tic'].unique():
-        tic_mask = (df['tic'] == tic)
-        df.loc[tic_mask, feature_cols_to_fill] = df.loc[tic_mask, feature_cols_to_fill].fillna(method='bfill') # Backfill first
-        df.loc[tic_mask, feature_cols_to_fill] = df.loc[tic_mask, feature_cols_to_fill].fillna(method='ffill') # Then forward fill
-
-    # Final check for NaNs in used features
-    if df[FEATURES].isnull().values.any():
-        logger.warning("Null values found after normalization and fillna. Check data.")
-        # Optionally drop rows with NaNs if they persist, though this might impact sequence length
-        # df.dropna(subset=FEATURES, inplace=True)
-        # assert not df[FEATURES].isnull().values.any(), "Null values persist even after dropna"
-
-    return df
 
 def make_env(data, tickers, features, evaluate_by, lookback, initial_capital, max_episode_steps, reward_scaling, log_metrics, log_dir, seed=0, train=True):
     def _init():
@@ -200,7 +138,7 @@ if __name__ == "__main__":
             sma_long: str = 'close_60_sma',
             rsi_col: str = 'rsi_30',
             dx_col: str = 'dx_30',
-            news_col: List[str] = ['mean_sentiment', 'news_count', 'mean_recent_3_news_90d', 'mean_recent_5_news_180d'],
+            #news_col: List[str] = ['mean_sentiment', 'news_count', 'mean_recent_3_news_90d', 'mean_recent_5_news_180d'],
             window: int = 30
             ):
             epsilon = 1e-8
@@ -230,11 +168,11 @@ if __name__ == "__main__":
 
             df[f'{rsi_col}_norm'] = df[rsi_col] / 100
             df[f'{dx_col}_norm'] = df[dx_col] / 100
-            for col in news_col:
-                m_mean = df[col].rolling(window).mean().shift(1)
-                m_std = df[col].rolling(window).std(ddof=0).shift(1)
-                df[f'{col}_norm'] = (df[col] - m_mean) / (m_std + epsilon)
-                df[f'{col}_norm'] = df[f'{col}_norm'].ffill().bfill()
+            # for col in news_col:
+            #     m_mean = df[col].rolling(window).mean().shift(1)
+            #     m_std = df[col].rolling(window).std(ddof=0).shift(1)
+            #     df[f'{col}_norm'] = (df[col] - m_mean) / (m_std + epsilon)
+            #     df[f'{col}_norm'] = df[f'{col}_norm'].ffill().bfill()
 
             assert not df.isnull().values.any(), "Null values found after normalization"
             return df
@@ -263,7 +201,7 @@ if __name__ == "__main__":
         checkpoint_callback = CheckpointCallback(
             save_freq=max(CHECKPOINT_FREQ // env.num_envs, 1),
             save_path=MODEL_SAVE_DIR,
-            name_prefix="ppo_stock_trader",
+            name_prefix="sac_stock_trader",
             save_replay_buffer=False,
             save_vecnormalize=False
         )
@@ -285,7 +223,7 @@ if __name__ == "__main__":
             **SAC_PARAMS
         )
 
-        logger.info("Starting PPO training...")
+        logger.info("Starting SAC training...")
         model.learn(
             total_timesteps=TOTAL_TIMESTEPS,
             callback=[checkpoint_callback, eval_callback],
@@ -294,7 +232,7 @@ if __name__ == "__main__":
         )
         logger.info("Training finished.")
 
-        final_model_path = os.path.join(MODEL_SAVE_DIR, "ppo_stock_trader_final")
+        final_model_path = os.path.join(MODEL_SAVE_DIR, "sac_stock_trader_final")
         model.save(final_model_path)
         logger.info(f"Final model saved to {final_model_path}")
 
