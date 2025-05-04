@@ -186,20 +186,19 @@ class StockTradingEnv(gym.Env):
         if self._current_step >= self._end_tick:
             self._terminated = True
             logger.info(f"Episode terminated: End of data reached at step {self._current_step}.")
-            if self.log_metrics and self._info_history:
-                self._generate_report()
+            self._output()
 
         elif self._portfolio_value <= self.initial_capital * 0.1:
             self._terminated = True
             logger.info(f"Episode terminated: Portfolio value ({self._portfolio_value:.2f}) fell below threshold.")
             reward -= 100 
-            if self.log_metrics and self._info_history:
-                self._generate_report()
+            self._output()
 
 
         if self.max_episode_step and (self._current_step - self._start_tick) >= self.max_episode_step:
             self._truncated = True
             logger.info(f"Episode truncated: Max steps ({self.max_episode_step}) reached.")
+            self._output()
 
         observation = self._get_obs()
         info = self._get_info()
