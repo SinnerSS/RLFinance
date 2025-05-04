@@ -263,5 +263,7 @@ class StockTradingEnv(gym.Env):
         if self.log_metrics and self._info_history:
             self._generate_report()
         if self.is_test:
+            history_path = self.log_dir / "history.csv"
             history_df = pd.DataFrame(self._info_history)
-            history_df.to_csv(self.log_dir / "history.csv")
+            history_df.to_csv(history_path, index=False)
+            logger.info(f"History saved to: {history_path}")
