@@ -196,6 +196,7 @@ if __name__ == "__main__":
                                        log_metrics=LOG_METRICS_ENV, 
                                        log_dir=TEST_SAVE_DIR)])
 
+        best_model_path = os.path.join(MODEL_SAVE_DIR, "best_model")
 
         checkpoint_callback = CheckpointCallback(
             save_freq=max(CHECKPOINT_FREQ // env.num_envs, 1),
@@ -207,7 +208,7 @@ if __name__ == "__main__":
         
         eval_callback = EvalCallback(
             eval_env,
-            best_model_save_path=os.path.join(MODEL_SAVE_DIR, "best_model"),
+            best_model_save_path=best_model_path,
             log_path=os.path.join(LOG_DIR, "eval"),
             eval_freq=max(EVAL_FREQ // env.num_envs, 1), 
             n_eval_episodes=N_EVAL_EPISODES,
@@ -236,6 +237,7 @@ if __name__ == "__main__":
         logger.info(f"Final model saved to {final_model_path}")
 
         logger.info("Running final test on the trained model...")
+        model = SAC.load(os.path.join(best_model_path, "best_model.zip"), env=test_env)
         obs = test_env.reset()
         done = False
         while not done:
