@@ -15,7 +15,6 @@ LOG_DIR = Path("./result")
 MODEL_SAVE_DIR = LOG_DIR / "models/PPO"
 BEST_MODEL_PATH = MODEL_SAVE_DIR / "best_model30040126" / "best_model.zip" # Example path
 TEST_SAVE_DIR = LOG_DIR / "test"
-PORTFOLIO_OUTPUT_CSV = TEST_SAVE_DIR / "test_portfolio_values_corrected.csv" # New output name
 
 # Features and Env Params (Must match training)
 SELECTED_TICKERS = 'all' # Or your specific list ['AAPL', 'MSFT', ...]
@@ -107,7 +106,7 @@ def normalize_features(
     return df
 
 
-def make_env(data, tickers, features, evaluate_by, lookback, initial_capital, max_episode_steps, reward_scaling, log_metrics, log_dir, seed=0):
+def make_env(data, tickers, features, evaluate_by, lookback, initial_capital, max_episode_steps, reward_scaling, log_metrics, log_dir, is_test, seed=0):
     # No Monitor wrapper needed for basic inference unless step logs are desired
     def _init():
         # Use the provided StockTradingEnv class
@@ -121,7 +120,8 @@ def make_env(data, tickers, features, evaluate_by, lookback, initial_capital, ma
             max_episode_step=max_episode_steps,
             reward_scaling=reward_scaling,
             log_metrics=log_metrics, # True to generate env's own report
-            log_dir=log_dir          # Directory for env's report
+            log_dir=log_dir,         # Directory for env's report
+            is_test=is_test
         )
         # env.seed(seed) # Seeding deprecated in Gymnasium, use reset(seed=...)
         return env
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         test_env = DummyVecEnv([make_env(test_data, SELECTED_TICKERS, env_features, EVALUATE_BY, LOOKBACK,
                                        INITIAL_CAPITAL, MAX_EPISODE_STEPS, REWARD_SCALING,
                                        log_metrics=True, # Generate env report
-                                       log_dir=TEST_SAVE_DIR)])
+                                       log_dir=TEST_SAVE_DIR, is_test=True)])
 
         # 3. Load the trained model
         if not BEST_MODEL_PATH.exists():
@@ -181,10 +181,8 @@ if __name__ == "__main__":
             raise FileNotFoundError(f"Model file not found: {BEST_MODEL_PATH}")
 
         logger.info(f"Loading best model from: {BEST_MODEL_PATH}")
-        # If using custom policy like LSTMPolicy, SB3 usually handles it if saved correctly.
-        # If issues arise, you might need: custom_objects={"policy_class": LSTMPolicy}
         logger.info("Starting inference on test data...")
-        model = PPO.load(os.path.join(best_model_path, "best_model.zip"), env=test_env)
+        model = PPO.load(BEST_MODEL_PATH, env=test_env)
         obs = test_env.reset()
 
         done = False
@@ -192,9 +190,6 @@ if __name__ == "__main__":
             action, _states = model.predict(obs, deterministic=True)
             obs, rewards, dones, infos = test_env.step(action)
             done = any(dones)
-
-        result_df = pd.DataFrame(test_env._info_history)
-        result_df.to_csv(os.path.join(TEST_SAVE_DIR, "history.csv"))
 
     except FileNotFoundError as e:
         logger.error(f"Fatal Error: Required file not found. {e}")

@@ -24,7 +24,8 @@ class StockTradingEnv(gym.Env):
             max_episode_step: Optional[int],
             reward_scaling: float = 1.0,
             log_metrics: bool = False,
-            log_dir: Optional[str] = None
+            log_dir: Optional[str] = None,
+            is_test: bool = False
         ):
         assert set(features + [evaluate_by, 'tic', 'date']).issubset(data.columns), "Expected {features} columns. Found {data.columns} columns."
 
@@ -45,6 +46,7 @@ class StockTradingEnv(gym.Env):
         self.log_metrics = log_metrics
         if self.log_metrics and log_dir:
             self.log_dir = Path(log_dir)
+        self.is_test = is_test
 
         self.action_space = gym.spaces.Box(
             low=0.0, high=1.0, shape=(1 + len(self.tic_list),), dtype=np.float32
@@ -256,3 +258,10 @@ class StockTradingEnv(gym.Env):
 
         except Exception as e:
             logger.error(f"Failed to generate holdings plot: {e}", exc_info=True)
+
+    def _output(self):
+        if self.log_metrics and self._info_history:
+            self._generate_report()
+        if self.is_test:
+            history_df = pd.DataFrame(self._info_history)
+            history_df.to_csv(self.log_dir / "history.csv")
